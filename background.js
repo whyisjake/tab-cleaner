@@ -213,6 +213,9 @@ chrome.tabs.onActivated.addListener((activeInfo) => {
   tabVisitHistory[activeInfo.tabId] = now;
   tabActivity[activeInfo.tabId] = now;
   lastActiveTab = activeInfo.tabId;
+  
+  // Save activity data
+  saveTabActivityToStorage();
 });
 
 chrome.tabs.onUpdated.addListener((tabId, changeInfo, tab) => {
@@ -226,6 +229,8 @@ chrome.tabs.onUpdated.addListener((tabId, changeInfo, tab) => {
         tabVisitHistory[tabId] = now;
         tabActivity[tabId] = now;
         console.log('Updated activity for active tab:', tabId);
+        // Save activity data
+        saveTabActivityToStorage();
       }
     });
   }
@@ -233,6 +238,11 @@ chrome.tabs.onUpdated.addListener((tabId, changeInfo, tab) => {
 
 chrome.tabs.onCreated.addListener((tab) => {
   console.log('Tab created:', tab.id);
+  // Initialize activity for new tab
+  const now = Date.now();
+  tabActivity[tab.id] = now;
+  tabVisitHistory[tab.id] = now;
+  saveTabActivityToStorage();
   updateTabCountBadge();
 });
 
@@ -245,6 +255,7 @@ chrome.tabs.onRemoved.addListener((tabId) => {
     lastActiveTab = null;
   }
   
+  saveTabActivityToStorage();
   updateTabCountBadge();
 });
 
@@ -352,31 +363,115 @@ async function initializeExistingTabs() {
     
     console.log('Initializing activity tracking for', tabs.length, 'existing tabs');
     
+    // Load existing activity data from storage first
+    const result = await chrome.storage.local.get(['backgroundTabActivity']);
+    const savedActivity = result.backgroundTabActivity || {};
+    
     tabs.forEach(tab => {
-      tabActivity[tab.id] = now;
-      tabVisitHistory[tab.id] = now;
+      // Use saved activity if available, otherwise set a reasonable default
+      if (savedActivity[tab.id]) {
+        tabActivity[tab.id] = savedActivity[tab.id];
+        tabVisitHistory[tab.id] = savedActivity[tab.id];
+      } else {
+        // For new/unknown tabs, set activity to 2 hours ago so they can be cleaned up
+        // if they truly are old tabs that weren't being tracked
+        const defaultAge = now - (2 * 60 * 60 * 1000); // 2 hours ago
+        tabActivity[tab.id] = tab.active ? now : defaultAge;
+        tabVisitHistory[tab.id] = tab.active ? now : defaultAge;
+      }
       
       if (activeTab.length > 0 && tab.id === activeTab[0].id) {
+        // Current active tab gets current timestamp
+        tabActivity[tab.id] = now;
+        tabVisitHistory[tab.id] = now;
         lastActiveTab = tab.id;
         console.log('Set active tab:', tab.id);
       }
     });
     
-    console.log('Initialized tab activity:', tabActivity);
+    // Save the initialized activity data
+    await saveTabActivityToStorage();
+    
+    console.log('Initialized tab activity for', Object.keys(tabActivity).length, 'tabs');
+    console.log('Sample activity data:', Object.entries(tabActivity).slice(0, 3));
   } catch (error) {
     console.error('Error initializing existing tabs:', error);
+  }
+}
+
+// Save tab activity to storage
+async function saveTabActivityToStorage() {
+  try {
+    await chrome.storage.local.set({
+      'backgroundTabActivity': tabActivity,
+      'backgroundLastActiveTab': lastActiveTab,
+      'backgroundActivityTimestamp': Date.now()
+    });
+  } catch (error) {
+    console.error('Failed to save tab activity:', error);
+  }
+}
+
+// Ensure all current tabs are being tracked
+async function ensureAllTabsTracked() {
+  try {
+    const tabs = await chrome.tabs.query({});
+    const now = Date.now();
+    let newTabsTracked = 0;
+    
+    tabs.forEach(tab => {
+      if (!tabActivity[tab.id]) {
+        // New tab not being tracked - set to 2 hours ago as default
+        const defaultAge = now - (2 * 60 * 60 * 1000); // 2 hours ago
+        tabActivity[tab.id] = defaultAge;
+        tabVisitHistory[tab.id] = defaultAge;
+        newTabsTracked++;
+      }
+    });
+    
+    if (newTabsTracked > 0) {
+      console.log(`Started tracking ${newTabsTracked} previously untracked tabs`);
+      await saveTabActivityToStorage();
+    }
+    
+    // Clean up tracking data for tabs that no longer exist
+    const existingTabIds = new Set(tabs.map(tab => tab.id));
+    const trackedTabIds = Object.keys(tabActivity).map(Number);
+    let removedTracking = 0;
+    
+    trackedTabIds.forEach(tabId => {
+      if (!existingTabIds.has(tabId)) {
+        delete tabActivity[tabId];
+        delete tabVisitHistory[tabId];
+        removedTracking++;
+      }
+    });
+    
+    if (removedTracking > 0) {
+      console.log(`Cleaned up tracking for ${removedTracking} non-existent tabs`);
+      await saveTabActivityToStorage();
+    }
+    
+  } catch (error) {
+    console.error('Error ensuring tabs are tracked:', error);
   }
 }
 
 // Main cleanup function
 async function cleanupInactiveTabs() {
   try {
+    // First ensure all tabs are being tracked
+    await ensureAllTabsTracked();
+    
     const tabs = await chrome.tabs.query({});
     const now = Date.now();
     const activeTab = await chrome.tabs.query({ active: true, currentWindow: true });
     const activeTabId = activeTab[0]?.id;
-    const inactiveThreshold = settings.inactiveTime * 60 * 1000; // Convert minutes to milliseconds
+    const inactiveThreshold = settings.inactiveTime * 60 * 1000; // settings.inactiveTime is in minutes
     let tabsClosedThisRun = 0;
+
+    console.log(`Running cleanup - checking ${tabs.length} tabs against ${settings.inactiveTime}min threshold`);
+    console.log(`Currently tracking ${Object.keys(tabActivity).length} tabs`);
 
     for (const tab of tabs) {
       // Skip based on settings
@@ -392,15 +487,22 @@ async function cleanupInactiveTabs() {
         continue;
       }
 
-      const lastActivity = tabActivity[tab.id] || now;
+      const lastActivity = tabActivity[tab.id];
+      if (!lastActivity) {
+        console.log(`Tab ${tab.id} has no activity data - skipping`);
+        continue;
+      }
+      
       const inactiveTime = now - lastActivity;
+      const inactiveMinutes = Math.floor(inactiveTime / (60 * 1000));
 
       if (inactiveTime > inactiveThreshold) {
         try {
+          console.log(`Closing tab: ${tab.title} (${inactiveMinutes}min inactive)`);
           await chrome.tabs.remove(tab.id);
           delete tabActivity[tab.id];
+          delete tabVisitHistory[tab.id];
           tabsClosedThisRun++;
-          console.log(`Closed inactive tab: ${tab.title}`);
         } catch (error) {
           console.error(`Error closing tab ${tab.id}:`, error);
         }
@@ -409,7 +511,11 @@ async function cleanupInactiveTabs() {
     
     // Update statistics if any tabs were closed
     if (tabsClosedThisRun > 0) {
+      console.log(`Closed ${tabsClosedThisRun} inactive tabs`);
       await incrementTabsRemovedCount(tabsClosedThisRun);
+      await saveTabActivityToStorage();
+    } else {
+      console.log('No tabs needed to be closed');
     }
     
   } catch (error) {
