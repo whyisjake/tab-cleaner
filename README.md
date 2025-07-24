@@ -149,12 +149,12 @@ cd tab-cleaner
 tab-cleaner/
 ├── manifest.json       # Extension configuration
 ├── background.js       # Service worker logic
-├── popup.html         # Statistics popup
-├── popup.js          # Popup functionality
-├── options.html      # Settings page
-├── options.js       # Settings functionality
-├── icons/          # Extension icons
-└── README.md      # This file
+├── popup.html          # Statistics popup
+├── popup.js            # Popup functionality
+├── options.html        # Settings page
+├── options.js          # Settings functionality
+├── icons/              # Extension icons
+└── README.md           # This file
 ```
 
 ## License
