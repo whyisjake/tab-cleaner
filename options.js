@@ -332,6 +332,9 @@ async function refreshTabsList() {
         
         displayTabs(tabsData);
         
+        // Update tab stats display
+        updateTabStats(tabsData);
+        
         // Save activity data after display
         await saveTabActivity();
         
@@ -445,6 +448,45 @@ async function incrementTabsRemovedCount(count = 1) {
     } catch (error) {
         console.error('Error updating tabs removed count:', error);
     }
+}
+
+// Update tab statistics display
+function updateTabStats(tabsData) {
+    const statsElement = document.getElementById('tabStats');
+    
+    // Count different tab types
+    const totalTabs = tabsData.length;
+    const pinnedTabs = tabsData.filter(tab => tab.pinned).length;
+    const audibleTabs = tabsData.filter(tab => tab.audible).length;
+    const protectedTabs = tabsData.filter(tab => tab.protected).length;
+    const dangerTabs = tabsData.filter(tab => tab.status === 'danger').length;
+    const warningTabs = tabsData.filter(tab => tab.status === 'warning').length;
+    const safeTabs = tabsData.filter(tab => tab.status === 'safe').length;
+    
+    // Build stats text
+    let statsText = `${totalTabs} tabs total`;
+    
+    if (pinnedTabs > 0) {
+        statsText += ` • ${pinnedTabs} pinned`;
+    }
+    
+    if (audibleTabs > 0) {
+        statsText += ` • ${audibleTabs} playing audio`;
+    }
+    
+    if (protectedTabs > 0) {
+        statsText += ` • ${protectedTabs} protected`;
+    }
+    
+    if (dangerTabs > 0) {
+        statsText += ` • ${dangerTabs} closing soon`;
+    }
+    
+    if (warningTabs > 0) {
+        statsText += ` • ${warningTabs} warning`;
+    }
+    
+    statsElement.textContent = statsText;
 }
 
 // Escape HTML to prevent XSS

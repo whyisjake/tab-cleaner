@@ -2,6 +2,8 @@
 
 A Chrome extension that automatically closes inactive tabs to keep your browser clean, fast, and organized.
 
+**[📖 Read the launch blog post →](https://jakespurlock.com/2025/07/introducing-tab-cleaner-automatic-tab-management-for-chrome/)**
+
 ## Features
 
 ### 🧹 **Automatic Tab Cleanup**
