@@ -1,7 +1,7 @@
 // Tab Cleaner Background Service Worker
 let tabActivity = {};
 let settings = {
-  inactiveTime: 30,
+  inactiveTime: 60,
   checkInterval: 5,
   ignorePinned: true,
   ignoreAudible: true
@@ -62,7 +62,7 @@ chrome.runtime.onConnect.addListener((port) => {
 // Load settings from storage and create alarm
 function loadSettingsAndCreateAlarm() {
   chrome.storage.sync.get({
-    inactiveTime: 30,
+    inactiveTime: 60,
     checkInterval: 5,
     ignorePinned: true,
     ignoreAudible: true
@@ -292,7 +292,14 @@ async function getTabsDataWithCustomTracking() {
       console.log(`Tab ${tab.id} (${tab.title.substring(0, 30)}...): last activity ${new Date(lastActivity).toLocaleTimeString()}, inactive for ${minutesInactive}m`);
       
       let status = 'safe';
-      let statusText = `Active ${minutesInactive}m ago`;
+      let statusText;
+      
+      // Format time display - switch to hours after 120 minutes
+      if (minutesInactive >= 120) {
+        statusText = `Active ${hoursInactive}h ago`;
+      } else {
+        statusText = `Active ${minutesInactive}m ago`;
+      }
       
       if (tab.id === activeTabId) {
         status = 'safe';
@@ -364,19 +371,31 @@ async function initializeExistingTabs() {
     console.log('Initializing activity tracking for', tabs.length, 'existing tabs');
     
     // Load existing activity data from storage first
-    const result = await chrome.storage.local.get(['backgroundTabActivity']);
+    const result = await chrome.storage.local.get(['backgroundTabActivity', 'extensionInstallTime']);
     const savedActivity = result.backgroundTabActivity || {};
+    let installTime = result.extensionInstallTime;
+    
+    // If this is first run, save install time
+    if (!installTime) {
+      installTime = now;
+      await chrome.storage.local.set({ extensionInstallTime: installTime });
+      console.log('First extension run - saving install time:', new Date(installTime));
+    }
     
     tabs.forEach(tab => {
-      // Use saved activity if available, otherwise set a reasonable default
       if (savedActivity[tab.id]) {
+        // Use saved activity if available
         tabActivity[tab.id] = savedActivity[tab.id];
         tabVisitHistory[tab.id] = savedActivity[tab.id];
+        console.log(`Tab ${tab.id}: Using saved activity from ${new Date(savedActivity[tab.id]).toLocaleTimeString()}`);
       } else {
-        // For new/unknown tabs, set activity to current time to be safe
-        // This prevents accidental closure of tabs we haven't been tracking
-        tabActivity[tab.id] = now;
-        tabVisitHistory[tab.id] = now;
+        // For unknown tabs, estimate age based on when extension was installed
+        // Assume tabs existed before install, so set their last activity to install time
+        // This allows them to accumulate inactivity time naturally
+        const estimatedLastActivity = Math.min(installTime, now - (5 * 60 * 1000)); // At least 5 minutes ago
+        tabActivity[tab.id] = estimatedLastActivity;
+        tabVisitHistory[tab.id] = estimatedLastActivity;
+        console.log(`Tab ${tab.id}: New tab, estimated last activity ${new Date(estimatedLastActivity).toLocaleTimeString()}`);
       }
       
       if (activeTab.length > 0 && tab.id === activeTab[0].id) {
@@ -384,7 +403,7 @@ async function initializeExistingTabs() {
         tabActivity[tab.id] = now;
         tabVisitHistory[tab.id] = now;
         lastActiveTab = tab.id;
-        console.log('Set active tab:', tab.id);
+        console.log('Set active tab:', tab.id, 'to current time');
       }
     });
     
@@ -392,7 +411,9 @@ async function initializeExistingTabs() {
     await saveTabActivityToStorage();
     
     console.log('Initialized tab activity for', Object.keys(tabActivity).length, 'tabs');
-    console.log('Sample activity data:', Object.entries(tabActivity).slice(0, 3));
+    console.log('Activity summary:', Object.entries(tabActivity).map(([id, time]) => 
+      `${id}: ${Math.floor((now - time) / (60 * 1000))}m ago`
+    ).slice(0, 5));
   } catch (error) {
     console.error('Error initializing existing tabs:', error);
   }
@@ -418,12 +439,19 @@ async function ensureAllTabsTracked() {
     const now = Date.now();
     let newTabsTracked = 0;
     
+    // Get install time to properly estimate age of new tabs
+    const result = await chrome.storage.local.get(['extensionInstallTime']);
+    const installTime = result.extensionInstallTime || now;
+    
     tabs.forEach(tab => {
       if (!tabActivity[tab.id]) {
-        // New tab not being tracked - set to current time to be safe
-        tabActivity[tab.id] = now;
-        tabVisitHistory[tab.id] = now;
+        // New tab discovered - estimate its age
+        // Use install time as baseline, but allow for some pre-existing age
+        const estimatedLastActivity = Math.min(installTime, now - (10 * 60 * 1000)); // At least 10 minutes ago
+        tabActivity[tab.id] = estimatedLastActivity;
+        tabVisitHistory[tab.id] = estimatedLastActivity;
         newTabsTracked++;
+        console.log(`Started tracking tab ${tab.id}, estimated last activity: ${new Date(estimatedLastActivity).toLocaleTimeString()}`);
       }
     });
     
