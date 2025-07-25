@@ -264,7 +264,14 @@ async function refreshTabsList() {
             console.log(`Tab ${tab.id} (${tab.title.substring(0, 30)}...): last activity ${new Date(lastActivity).toLocaleTimeString()}, inactive for ${minutesInactive}m`);
             
             let status = 'safe';
-            let statusText = `Active ${minutesInactive}m ago`;
+            let statusText;
+            
+            // Format time display - switch to hours after 120 minutes
+            if (minutesInactive >= 120) {
+                statusText = `Active ${hoursInactive}h ago`;
+            } else {
+                statusText = `Active ${minutesInactive}m ago`;
+            }
             
             if (tab.id === activeTabId) {
                 status = 'safe';
