@@ -163,6 +163,13 @@ This project is licensed under the MIT License - see the [LICENSE](LICENSE) file
 
 ## Changelog
 
+### Version 1.0.1
+- **Fixed**: Tab activity tracking now properly monitors all open tabs
+- **Fixed**: Improved tab cleanup timing accuracy 
+- **Fixed**: Enhanced persistence of activity data across browser sessions
+- **Added**: Twitter link in popup and options pages
+- **Improved**: More reliable service worker background processing
+
 ### Version 1.0.0
 - Initial release
 - Automatic tab cleanup functionality
