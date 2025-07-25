@@ -1,15 +1,11 @@
 {
   "manifest_version": 3,
   "name": "Tab Cleaner",
-  "version": "1.0.1",
+  "version": "1.0.2",
   "description": "Automatically closes inactive tabs to keep your browser clean and fast. Track tab activity and set custom timeouts.",
   "author": "Jake Spurlock",
   "homepage_url": "https://github.com/whyisjake/tab-cleaner",
-  "permissions": [
-    "tabs",
-    "storage",
-    "alarms"
-  ],
+  "permissions": ["tabs", "storage", "alarms"],
   "background": {
     "service_worker": "background.js"
   },

@@ -119,217 +119,33 @@ async function wakeUpServiceWorker() {
     }
 }
 
-// Self-contained tab activity tracker
-let localTabActivity = {};
-let localLastActiveTab = null;
-let activityTrackingInitialized = false;
+// Options page now uses background script's tracking data
+// No need for duplicate local tracking system
 
-// Save tab activity to storage
-async function saveTabActivity() {
-    try {
-        await chrome.storage.local.set({
-            'optionsTabActivity': localTabActivity,
-            'optionsLastActiveTab': localLastActiveTab,
-            'optionsActivityTimestamp': Date.now()
-        });
-        console.log('Saved tab activity to storage');
-    } catch (error) {
-        console.error('Failed to save tab activity:', error);
-    }
-}
-
-// Load tab activity from storage
-async function loadTabActivity() {
-    try {
-        const result = await chrome.storage.local.get([
-            'optionsTabActivity', 
-            'optionsLastActiveTab', 
-            'optionsActivityTimestamp'
-        ]);
-        
-        if (result.optionsTabActivity) {
-            localTabActivity = result.optionsTabActivity;
-            localLastActiveTab = result.optionsLastActiveTab;
-            
-            const savedTimestamp = result.optionsActivityTimestamp || 0;
-            const now = Date.now();
-            const timeSinceSave = now - savedTimestamp;
-            
-            console.log(`Loaded tab activity from storage (${Math.floor(timeSinceSave / 1000)}s ago):`, localTabActivity);
-            
-            // Clean up very old data (older than 7 days)
-            const maxAge = 7 * 24 * 60 * 60 * 1000; // 7 days
-            Object.keys(localTabActivity).forEach(tabId => {
-                if (now - localTabActivity[tabId] > maxAge) {
-                    delete localTabActivity[tabId];
-                }
-            });
-            
-            return true;
-        } else {
-            console.log('No saved tab activity found, starting fresh');
-            return false;
-        }
-    } catch (error) {
-        console.error('Failed to load tab activity:', error);
-        return false;
-    }
-}
-
-// Initialize local activity tracking
-async function initializeLocalTracking() {
-    if (activityTrackingInitialized) return;
-    
-    console.log('Initializing local tab activity tracking');
-    
-    // Load existing activity data
-    await loadTabActivity();
-    
-    // Set up tab event listeners
-    chrome.tabs.onActivated.addListener((activeInfo) => {
-        const now = Date.now();
-        console.log('Local tracking: Tab activated:', activeInfo.tabId);
-        localTabActivity[activeInfo.tabId] = now;
-        localLastActiveTab = activeInfo.tabId;
-        saveTabActivity(); // Save immediately
-    });
-    
-    chrome.tabs.onUpdated.addListener((tabId, changeInfo, tab) => {
-        if (changeInfo.status === 'complete' || changeInfo.url) {
-            // Only update if this is the active tab
-            chrome.tabs.query({ active: true, currentWindow: true }, (activeTabs) => {
-                if (activeTabs.length > 0 && activeTabs[0].id === tabId) {
-                    const now = Date.now();
-                    console.log('Local tracking: Active tab updated:', tabId);
-                    localTabActivity[tabId] = now;
-                    saveTabActivity(); // Save immediately
-                }
-            });
-        }
-    });
-    
-    chrome.tabs.onRemoved.addListener((tabId) => {
-        console.log('Local tracking: Tab removed:', tabId);
-        delete localTabActivity[tabId];
-        if (localLastActiveTab === tabId) {
-            localLastActiveTab = null;
-        }
-        saveTabActivity(); // Save immediately
-    });
-    
-    activityTrackingInitialized = true;
-}
-
-// Refresh tabs list with local tracking
+// Refresh tabs list using background script data
 async function refreshTabsList() {
     const container = document.getElementById('tabsContainer');
     container.innerHTML = '<div style="padding: 20px; text-align: center; color: #666;">Loading tabs...</div>';
     
-    // Initialize local tracking if not done
-    await initializeLocalTracking();
-    
     try {
-        // Get current settings
-        const settings = await new Promise(resolve => {
-            chrome.storage.sync.get({
-                inactiveTime: 30,
-                checkInterval: 5,
-                ignorePinned: true,
-                ignoreAudible: true
-            }, resolve);
+        // Wake up service worker to ensure it's running
+        await wakeUpServiceWorker();
+        
+        // Get tabs data from background script
+        const response = await new Promise((resolve) => {
+            chrome.runtime.sendMessage({ action: 'getTabsData' }, resolve);
         });
         
-        // Get tabs and build activity data locally
-        const tabs = await chrome.tabs.query({});
-        const activeTab = await chrome.tabs.query({ active: true, currentWindow: true });
-        const activeTabId = activeTab[0]?.id;
-        const now = Date.now();
-        const inactiveThreshold = settings.inactiveTime * 60 * 1000;
-        
-        // Initialize activity for tabs we haven't seen before
-        tabs.forEach(tab => {
-            if (!localTabActivity[tab.id]) {
-                localTabActivity[tab.id] = now; // Assume current time for new tabs
-            }
-        });
-        
-        console.log('Local tab activity state:', localTabActivity);
-        
-        const tabsData = tabs.map(tab => {
-            const lastActivity = localTabActivity[tab.id] || now;
-            const inactiveTime = now - lastActivity;
-            const minutesInactive = Math.floor(inactiveTime / (1000 * 60));
-            const hoursInactive = (inactiveTime / (1000 * 60 * 60)).toFixed(1);
-            
-            console.log(`Tab ${tab.id} (${tab.title.substring(0, 30)}...): last activity ${new Date(lastActivity).toLocaleTimeString()}, inactive for ${minutesInactive}m`);
-            
-            let status = 'safe';
-            let statusText = `Active ${minutesInactive}m ago`;
-            
-            if (tab.id === activeTabId) {
-                status = 'safe';
-                statusText = 'Currently Active';
-                // Update activity for currently active tab
-                localTabActivity[tab.id] = now;
-            } else if (inactiveTime > inactiveThreshold * 0.8) {
-                status = 'danger';
-                statusText = `Will close soon (${hoursInactive}h inactive)`;
-            } else if (inactiveTime > inactiveThreshold * 0.5) {
-                status = 'warning';
-                statusText = `${hoursInactive}h inactive`;
-            }
-            
-            // Check if tab would be protected
-            let protected = false;
-            let protectedReason = '';
-            
-            if (tab.url.startsWith('chrome://')) {
-                protected = true;
-                protectedReason = 'Chrome page';
-            } else if (settings.ignorePinned && tab.pinned) {
-                protected = true;
-                protectedReason = 'Pinned';
-            } else if (settings.ignoreAudible && tab.audible) {
-                protected = true;
-                protectedReason = 'Playing audio';
-            }
-            
-            if (protected) {
-                status = 'safe';
-                statusText = `Protected (${protectedReason})`;
-            }
-
-            return {
-                id: tab.id,
-                title: tab.title,
-                url: tab.url,
-                status: status,
-                statusText: statusText,
-                inactiveTime: inactiveTime,
-                minutesInactive: minutesInactive,
-                hoursInactive: hoursInactive,
-                protected: protected,
-                protectedReason: protectedReason,
-                pinned: tab.pinned,
-                audible: tab.audible,
-                active: tab.id === activeTabId
-            };
-        }).sort((a, b) => {
-            // First priority: Pinned tabs come first
-            if (a.pinned && !b.pinned) return -1;
-            if (!a.pinned && b.pinned) return 1;
-            
-            // Within pinned or unpinned groups, sort by activity (most recent first)
-            return a.inactiveTime - b.inactiveTime;
-        });
-        
-        displayTabs(tabsData);
-        
-        // Save activity data after display
-        await saveTabActivity();
+        if (response && response.tabsData) {
+            console.log('Received tabs data from background script:', response.tabsData.length, 'tabs');
+            displayTabs(response.tabsData);
+        } else {
+            console.error('Failed to get tabs data from background script:', response);
+            container.innerHTML = '<div style="padding: 20px; text-align: center; color: #666;">Error loading tabs data. Try refreshing.</div>';
+        }
         
     } catch (error) {
-        console.error('Error in local tab tracking:', error);
+        console.error('Error refreshing tabs list:', error);
         container.innerHTML = '<div style="padding: 20px; text-align: center; color: #666;">Error: ' + error.message + '</div>';
     }
 }
@@ -399,12 +215,6 @@ async function closeTab(tabId) {
         
         // Close the tab
         await chrome.tabs.remove(tabId);
-        
-        // Remove from local activity tracking
-        delete localTabActivity[tabId];
-        if (localLastActiveTab === tabId) {
-            localLastActiveTab = null;
-        }
         
         // Update the all-time tabs removed counter
         await incrementTabsRemovedCount(1);
