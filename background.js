@@ -1,7 +1,7 @@
 // Tab Cleaner Background Service Worker
 let tabActivity = {};
 let settings = {
-  inactiveTime: 30,
+  inactiveTime: 60,
   checkInterval: 5,
   ignorePinned: true,
   ignoreAudible: true
@@ -62,7 +62,7 @@ chrome.runtime.onConnect.addListener((port) => {
 // Load settings from storage and create alarm
 function loadSettingsAndCreateAlarm() {
   chrome.storage.sync.get({
-    inactiveTime: 30,
+    inactiveTime: 60,
     checkInterval: 5,
     ignorePinned: true,
     ignoreAudible: true

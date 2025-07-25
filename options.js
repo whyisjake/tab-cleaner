@@ -11,7 +11,7 @@ document.addEventListener('DOMContentLoaded', function() {
 
 function loadSettings() {
     chrome.storage.sync.get({
-        inactiveTime: 30,
+        inactiveTime: 60,
         checkInterval: 5,
         ignorePinned: true,
         ignoreAudible: true
