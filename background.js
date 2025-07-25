@@ -373,11 +373,10 @@ async function initializeExistingTabs() {
         tabActivity[tab.id] = savedActivity[tab.id];
         tabVisitHistory[tab.id] = savedActivity[tab.id];
       } else {
-        // For new/unknown tabs, set activity to 2 hours ago so they can be cleaned up
-        // if they truly are old tabs that weren't being tracked
-        const defaultAge = now - (2 * 60 * 60 * 1000); // 2 hours ago
-        tabActivity[tab.id] = tab.active ? now : defaultAge;
-        tabVisitHistory[tab.id] = tab.active ? now : defaultAge;
+        // For new/unknown tabs, set activity to current time to be safe
+        // This prevents accidental closure of tabs we haven't been tracking
+        tabActivity[tab.id] = now;
+        tabVisitHistory[tab.id] = now;
       }
       
       if (activeTab.length > 0 && tab.id === activeTab[0].id) {
@@ -421,10 +420,9 @@ async function ensureAllTabsTracked() {
     
     tabs.forEach(tab => {
       if (!tabActivity[tab.id]) {
-        // New tab not being tracked - set to 2 hours ago as default
-        const defaultAge = now - (2 * 60 * 60 * 1000); // 2 hours ago
-        tabActivity[tab.id] = defaultAge;
-        tabVisitHistory[tab.id] = defaultAge;
+        // New tab not being tracked - set to current time to be safe
+        tabActivity[tab.id] = now;
+        tabVisitHistory[tab.id] = now;
         newTabsTracked++;
       }
     });
