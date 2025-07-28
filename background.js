@@ -604,12 +604,8 @@ function updateIconForPauseState(paused) {
     // In the future, you could create grayscale versions for paused state
     chrome.action.setIcon({ path: iconPath });
 
-    // Change badge color to indicate pause state
-    if (paused) {
-      chrome.action.setBadgeBackgroundColor({ color: '#ffc107' }); // Yellow for paused
-    } else {
-      chrome.action.setBadgeBackgroundColor({ color: '#28a745' }); // Green for active
-    }
+    // Update badge color by calling updateTabCountBadge which handles color logic
+    updateTabCountBadge();
 
     console.log(`Icon updated for ${paused ? 'paused' : 'active'} state`);
   } catch (error) {
@@ -734,6 +730,8 @@ async function updateTabCountBadge() {
     await chrome.action.setBadgeBackgroundColor({
       color: badgeColor,
     });
+
+    console.log(`Badge color set to ${badgeColor} (paused: ${isPaused})`);
 
     console.log(
       `Successfully updated badge: ${tabCount} tabs with color ${badgeColor}`
