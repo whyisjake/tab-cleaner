@@ -390,9 +390,9 @@ async function initializeExistingTabs() {
         console.log(`Tab ${tab.id}: Using saved activity from ${new Date(savedActivity[tab.id]).toLocaleTimeString()}`);
       } else {
         // For unknown tabs, estimate age based on when extension was installed
-        // Assume tabs existed before install, so set their last activity to install time
-        // This allows them to accumulate inactivity time naturally
-        const estimatedLastActivity = Math.min(installTime, now - (5 * 60 * 1000)); // At least 5 minutes ago
+        // Set their last activity to current time to prevent premature closure
+        // This gives them a fresh start from when tracking begins
+        const estimatedLastActivity = now;
         tabActivity[tab.id] = estimatedLastActivity;
         tabVisitHistory[tab.id] = estimatedLastActivity;
         console.log(`Tab ${tab.id}: New tab, estimated last activity ${new Date(estimatedLastActivity).toLocaleTimeString()}`);
@@ -445,9 +445,9 @@ async function ensureAllTabsTracked() {
     
     tabs.forEach(tab => {
       if (!tabActivity[tab.id]) {
-        // New tab discovered - estimate its age
-        // Use install time as baseline, but allow for some pre-existing age
-        const estimatedLastActivity = Math.min(installTime, now - (10 * 60 * 1000)); // At least 10 minutes ago
+        // New tab discovered - give it current timestamp to prevent premature closure
+        // This ensures newly discovered tabs get a fresh start
+        const estimatedLastActivity = now;
         tabActivity[tab.id] = estimatedLastActivity;
         tabVisitHistory[tab.id] = estimatedLastActivity;
         newTabsTracked++;
