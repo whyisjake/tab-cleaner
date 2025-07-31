@@ -215,13 +215,22 @@ async function closeTab(tabId) {
     try {
         console.log('Attempting to close tab:', tabId);
 
-        // Close the tab
-        await chrome.tabs.remove(tabId);
+        // Close the tab with tracking via background script
+        const response = await new Promise((resolve) => {
+            chrome.runtime.sendMessage({ 
+                action: 'closeTabWithTracking', 
+                tabId: tabId 
+            }, resolve);
+        });
 
-        // Update the all-time tabs removed counter
-        await incrementTabsRemovedCount(1);
+        if (response && response.success) {
+            // Update the all-time tabs removed counter
+            await incrementTabsRemovedCount(1);
 
-        console.log('Successfully closed tab:', tabId);
+            console.log('Successfully closed tab:', response.result.title);
+        } else {
+            throw new Error(response?.error || 'Failed to close tab');
+        }
 
         // Refresh the tab list to show updated state
         await refreshTabsList();

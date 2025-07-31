@@ -140,6 +140,82 @@
         .creator-link:hover {
             color: #007bff;
         }
+
+        .recently-closed-section {
+            background: white;
+            border-radius: 8px;
+            padding: 16px;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+            margin-bottom: 12px;
+        }
+
+        .section-title {
+            font-size: 14px;
+            font-weight: 600;
+            color: #2c3e50;
+            margin: 0 0 12px 0;
+        }
+
+        .closed-tab-item {
+            display: flex;
+            align-items: center;
+            padding: 8px 0;
+            border-bottom: 1px solid #f1f3f4;
+        }
+
+        .closed-tab-item:last-child {
+            border-bottom: none;
+        }
+
+        .closed-tab-favicon {
+            width: 16px;
+            height: 16px;
+            margin-right: 8px;
+            flex-shrink: 0;
+        }
+
+        .closed-tab-info {
+            flex-grow: 1;
+            min-width: 0;
+        }
+
+        .closed-tab-title {
+            font-size: 12px;
+            color: #2c3e50;
+            white-space: nowrap;
+            overflow: hidden;
+            text-overflow: ellipsis;
+            margin: 0 0 2px 0;
+        }
+
+        .closed-tab-details {
+            font-size: 10px;
+            color: #6c757d;
+        }
+
+        .reopen-btn {
+            background-color: #28a745;
+            color: white;
+            border: none;
+            padding: 4px 8px;
+            border-radius: 3px;
+            font-size: 10px;
+            cursor: pointer;
+            margin-left: 8px;
+            flex-shrink: 0;
+        }
+
+        .reopen-btn:hover {
+            background-color: #218838;
+        }
+
+        .no-recent-tabs {
+            text-align: center;
+            color: #6c757d;
+            font-size: 12px;
+            font-style: italic;
+            padding: 12px 0;
+        }
     </style>
 </head>
 <body>
@@ -191,6 +267,15 @@
 
         <div class="reset-container">
             <button class="reset-btn" id="resetBtn">Reset Statistics</button>
+        </div>
+    </div>
+
+    <div id="recentlyClosedContainer" style="display: none;">
+        <div class="recently-closed-section">
+            <h3 class="section-title">Recently Closed Tabs</h3>
+            <div id="recentlyClosedList">
+                <div class="no-recent-tabs">No recently closed tabs</div>
+            </div>
         </div>
     </div>
 
