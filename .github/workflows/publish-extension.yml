@@ -23,34 +23,18 @@ jobs:
     - name: Checkout code
       uses: actions/checkout@v4
 
-    - name: Setup Node.js
-      uses: actions/setup-node@v4
-      with:
-        node-version: '18'
-        cache: 'npm'
-
-    - name: Install dependencies
-      run: npm ci
-
-    - name: Validate extension
-      run: npm run validate
-
-    - name: Build extension
-      run: npm run build
-
-    - name: Get version from tag
+    - name: Get version from manifest
       id: version
       run: |
         if [ "${{ github.event_name }}" = "push" ]; then
           echo "version=${GITHUB_REF#refs/tags/v}" >> $GITHUB_OUTPUT
         else
-          echo "version=$(node -p "require('./package.json').version")" >> $GITHUB_OUTPUT
+          echo "version=$(grep -o '"version": "[^"]*"' manifest.json | cut -d'"' -f4)" >> $GITHUB_OUTPUT
         fi
 
     - name: Create release zip
       run: |
-        cd dist
-        zip -r ../tab-cleaner-v${{ steps.version.outputs.version }}.zip .
+        zip -r tab-cleaner-v${{ steps.version.outputs.version }}.zip . -x "*.git*" "*.github*" "README.md" "CLAUDE.md"
 
     - name: Upload to Chrome Web Store
       uses: mnao305/chrome-extension-upload@v5.0.0
