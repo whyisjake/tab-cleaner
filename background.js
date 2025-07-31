@@ -11,6 +11,9 @@ let settings = {
 let tabVisitHistory = {};
 let lastActiveTab = null;
 
+// Track recently closed tabs for recovery
+let recentlyClosedTabs = [];
+
 // Initialize extension
 chrome.runtime.onInstalled.addListener(() => {
   console.log('Tab Cleaner extension installed');
@@ -20,6 +23,9 @@ chrome.runtime.onInstalled.addListener(() => {
   
   // Initialize activity tracking for existing tabs
   initializeExistingTabs();
+  
+  // Load recently closed tabs
+  loadRecentlyClosedTabs();
   
   // Set up keepalive
   setupKeepalive();
@@ -33,6 +39,7 @@ chrome.runtime.onStartup.addListener(() => {
   console.log('Tab Cleaner extension started');
   loadSettingsAndCreateAlarm();
   initializeExistingTabs();
+  loadRecentlyClosedTabs();
   setupKeepalive();
   updateTabCountBadge();
 });
@@ -115,6 +122,34 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
     console.log('Manual badge update requested');
     updateTabCountBadge();
     return false;
+  }
+  
+  if (message.action === 'getRecentlyClosedTabs') {
+    console.log('Getting recently closed tabs...');
+    sendResponse({ recentlyClosedTabs: recentlyClosedTabs });
+    return false;
+  }
+  
+  if (message.action === 'reopenTab') {
+    console.log('Reopening tab:', message.tabId);
+    reopenClosedTab(message.tabId).then(newTab => {
+      sendResponse({ success: true, newTab: newTab });
+    }).catch(error => {
+      console.error('Error reopening tab:', error);
+      sendResponse({ success: false, error: error.message });
+    });
+    return true; // Keep message channel open for async response
+  }
+  
+  if (message.action === 'closeTabWithTracking') {
+    console.log('Manually closing tab with tracking:', message.tabId);
+    closeTabWithTracking(message.tabId).then(result => {
+      sendResponse({ success: true, result: result });
+    }).catch(error => {
+      console.error('Error closing tab with tracking:', error);
+      sendResponse({ success: false, error: error.message });
+    });
+    return true; // Keep message channel open for async response  
   }
   
   console.log('Unknown message action:', message.action);
@@ -432,6 +467,121 @@ async function saveTabActivityToStorage() {
   }
 }
 
+// Add tab to recently closed list
+async function addToRecentlyClosedTabs(tab, reason = 'auto-closed') {
+  try {
+    const closedTabInfo = {
+      id: `closed_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`,
+      title: tab.title,
+      url: tab.url,
+      favIconUrl: tab.favIconUrl,
+      windowId: tab.windowId,
+      closedAt: Date.now(),
+      reason: reason,
+      inactiveTime: tabActivity[tab.id] ? Date.now() - tabActivity[tab.id] : 0
+    };
+
+    recentlyClosedTabs.unshift(closedTabInfo);
+    
+    // Keep only last 50 closed tabs
+    if (recentlyClosedTabs.length > 50) {
+      recentlyClosedTabs = recentlyClosedTabs.slice(0, 50);
+    }
+    
+    // Remove tabs older than 7 days
+    const sevenDaysAgo = Date.now() - (7 * 24 * 60 * 60 * 1000);
+    recentlyClosedTabs = recentlyClosedTabs.filter(tab => tab.closedAt > sevenDaysAgo);
+    
+    // Save to storage
+    await chrome.storage.local.set({
+      'recentlyClosedTabs': recentlyClosedTabs
+    });
+    
+    console.log(`Added tab to recently closed: ${tab.title}`);
+  } catch (error) {
+    console.error('Error saving recently closed tab:', error);
+  }
+}
+
+// Load recently closed tabs from storage
+async function loadRecentlyClosedTabs() {
+  try {
+    const result = await chrome.storage.local.get(['recentlyClosedTabs']);
+    if (result.recentlyClosedTabs) {
+      recentlyClosedTabs = result.recentlyClosedTabs;
+      console.log(`Loaded ${recentlyClosedTabs.length} recently closed tabs`);
+    }
+  } catch (error) {
+    console.error('Error loading recently closed tabs:', error);
+  }
+}
+
+// Reopen a recently closed tab
+async function reopenClosedTab(closedTabId) {
+  try {
+    const tabIndex = recentlyClosedTabs.findIndex(tab => tab.id === closedTabId);
+    if (tabIndex === -1) {
+      throw new Error('Tab not found in recently closed list');
+    }
+    
+    const closedTab = recentlyClosedTabs[tabIndex];
+    
+    // Create new tab
+    const newTab = await chrome.tabs.create({
+      url: closedTab.url,
+      windowId: closedTab.windowId
+    });
+    
+    // Initialize activity for the reopened tab
+    tabActivity[newTab.id] = Date.now();
+    tabVisitHistory[newTab.id] = Date.now();
+    
+    // Remove from recently closed list
+    recentlyClosedTabs.splice(tabIndex, 1);
+    await chrome.storage.local.set({
+      'recentlyClosedTabs': recentlyClosedTabs
+    });
+    
+    await saveTabActivityToStorage();
+    
+    console.log(`Reopened tab: ${closedTab.title}`);
+    return newTab;
+  } catch (error) {
+    console.error('Error reopening tab:', error);
+    throw error;
+  }
+}
+
+// Close a tab with tracking (for manual closes from options page)
+async function closeTabWithTracking(tabId) {
+  try {
+    // Get tab info before closing
+    const tab = await chrome.tabs.get(tabId);
+    
+    // Save tab info to recently closed
+    await addToRecentlyClosedTabs(tab, 'manually-closed');
+    
+    // Close the tab
+    await chrome.tabs.remove(tabId);
+    
+    // Clean up tracking data
+    delete tabActivity[tabId];
+    delete tabVisitHistory[tabId];
+    
+    if (lastActiveTab === tabId) {
+      lastActiveTab = null;
+    }
+    
+    await saveTabActivityToStorage();
+    
+    console.log(`Manually closed tab with tracking: ${tab.title}`);
+    return { tabId, title: tab.title };
+  } catch (error) {
+    console.error('Error closing tab with tracking:', error);
+    throw error;
+  }
+}
+
 // Ensure all current tabs are being tracked
 async function ensureAllTabsTracked() {
   try {
@@ -525,6 +675,10 @@ async function cleanupInactiveTabs() {
       if (inactiveTime > inactiveThreshold) {
         try {
           console.log(`Closing tab: ${tab.title} (${inactiveMinutes}min inactive)`);
+          
+          // Save tab info before closing
+          await addToRecentlyClosedTabs(tab, 'auto-closed');
+          
           await chrome.tabs.remove(tab.id);
           delete tabActivity[tab.id];
           delete tabVisitHistory[tab.id];
