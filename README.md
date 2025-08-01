@@ -167,6 +167,20 @@ This project is licensed under the MIT License - see the [LICENSE](LICENSE) file
 
 ## Changelog
 
+### Version 1.0.6
+- **Added**: GitHub Actions workflow for automated Chrome Web Store publishing
+- **Added**: Automated GitHub releases with version tags
+- **Improved**: Development and deployment workflow automation
+
+### Version 1.0.5
+- **Added**: Comprehensive build system with package management
+- **Added**: Chrome Web Store automation scripts
+- **Improved**: Development tooling and validation
+
+### Version 1.0.4
+- **Added**: Recently closed tabs restoration feature
+- **Improved**: Tab management functionality
+
 ### Version 1.0.1
 - **Fixed**: Tab activity tracking now properly monitors all open tabs
 - **Fixed**: Improved tab cleanup timing accuracy 
