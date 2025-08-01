@@ -167,6 +167,10 @@ This project is licensed under the MIT License - see the [LICENSE](LICENSE) file
 
 ## Changelog
 
+### Version 1.0.7
+- **Improved**: Production builds now automatically remove console.log statements
+- **Enhanced**: Cleaner Chrome Web Store releases with optimized JavaScript
+
 ### Version 1.0.6
 - **Added**: GitHub Actions workflow for automated Chrome Web Store publishing
 - **Added**: Automated GitHub releases with version tags
