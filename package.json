@@ -11,10 +11,12 @@
     "dev": "npm run copy-files",
     "validate": "npm run validate-manifest && npm run lint",
     "validate-manifest": "node scripts/validate-manifest.js",
-    "lint": "echo 'Linting not yet configured'",
+    "lint": "prettier --check .",
+    "format": "prettier --write .",
+    "format:check": "prettier --check .",
     "version-bump": "npm version patch && npm run sync-version",
     "sync-version": "node scripts/sync-version.js",
-    "version-bump:minor": "npm version minor && npm run sync-version", 
+    "version-bump:minor": "npm version minor && npm run sync-version",
     "version-bump:major": "npm version major && npm run sync-version",
     "prepare-release": "npm run version-bump && npm run build",
     "publish-release": "npm run prepare-release && git push origin main --follow-tags",
@@ -40,7 +42,9 @@
   "engines": {
     "node": ">=14.0.0"
   },
-  "devDependencies": {},
+  "devDependencies": {
+    "prettier": "^3.0.0"
+  },
   "extensionInfo": {
     "manifestVersion": 3,
     "chromeWebStore": {
