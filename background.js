@@ -26,10 +26,10 @@ chrome.runtime.onInstalled.addListener(() => {
 
   // Initialize activity tracking for existing tabs
   initializeExistingTabs();
-  
+
   // Load recently closed tabs
   loadRecentlyClosedTabs();
-  
+
   // Set up keepalive
   setupKeepalive();
 
@@ -146,35 +146,39 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
     updateTabCountBadge();
     return false;
   }
-  
+
   if (message.action === 'getRecentlyClosedTabs') {
     console.log('Getting recently closed tabs...');
     sendResponse({ recentlyClosedTabs: recentlyClosedTabs });
     return false;
   }
-  
+
   if (message.action === 'reopenTab') {
     console.log('Reopening tab:', message.tabId);
-    reopenClosedTab(message.tabId).then(newTab => {
-      sendResponse({ success: true, newTab: newTab });
-    }).catch(error => {
-      console.error('Error reopening tab:', error);
-      sendResponse({ success: false, error: error.message });
-    });
+    reopenClosedTab(message.tabId)
+      .then(newTab => {
+        sendResponse({ success: true, newTab: newTab });
+      })
+      .catch(error => {
+        console.error('Error reopening tab:', error);
+        sendResponse({ success: false, error: error.message });
+      });
     return true; // Keep message channel open for async response
   }
-  
+
   if (message.action === 'closeTabWithTracking') {
     console.log('Manually closing tab with tracking:', message.tabId);
-    closeTabWithTracking(message.tabId).then(result => {
-      sendResponse({ success: true, result: result });
-    }).catch(error => {
-      console.error('Error closing tab with tracking:', error);
-      sendResponse({ success: false, error: error.message });
-    });
-    return true; // Keep message channel open for async response  
+    closeTabWithTracking(message.tabId)
+      .then(result => {
+        sendResponse({ success: true, result: result });
+      })
+      .catch(error => {
+        console.error('Error closing tab with tracking:', error);
+        sendResponse({ success: false, error: error.message });
+      });
+    return true; // Keep message channel open for async response
   }
-  
+
   console.log('Unknown message action:', message.action);
   return false; // No response needed for other messages
 });
@@ -553,25 +557,27 @@ async function addToRecentlyClosedTabs(tab, reason = 'auto-closed') {
       windowId: tab.windowId,
       closedAt: Date.now(),
       reason: reason,
-      inactiveTime: tabActivity[tab.id] ? Date.now() - tabActivity[tab.id] : 0
+      inactiveTime: tabActivity[tab.id] ? Date.now() - tabActivity[tab.id] : 0,
     };
 
     recentlyClosedTabs.unshift(closedTabInfo);
-    
+
     // Keep only last 50 closed tabs
     if (recentlyClosedTabs.length > 50) {
       recentlyClosedTabs = recentlyClosedTabs.slice(0, 50);
     }
-    
+
     // Remove tabs older than 7 days
-    const sevenDaysAgo = Date.now() - (7 * 24 * 60 * 60 * 1000);
-    recentlyClosedTabs = recentlyClosedTabs.filter(tab => tab.closedAt > sevenDaysAgo);
-    
+    const sevenDaysAgo = Date.now() - 7 * 24 * 60 * 60 * 1000;
+    recentlyClosedTabs = recentlyClosedTabs.filter(
+      tab => tab.closedAt > sevenDaysAgo
+    );
+
     // Save to storage
     await chrome.storage.local.set({
-      'recentlyClosedTabs': recentlyClosedTabs
+      recentlyClosedTabs: recentlyClosedTabs,
     });
-    
+
     console.log(`Added tab to recently closed: ${tab.title}`);
   } catch (error) {
     console.error('Error saving recently closed tab:', error);
@@ -594,31 +600,33 @@ async function loadRecentlyClosedTabs() {
 // Reopen a recently closed tab
 async function reopenClosedTab(closedTabId) {
   try {
-    const tabIndex = recentlyClosedTabs.findIndex(tab => tab.id === closedTabId);
+    const tabIndex = recentlyClosedTabs.findIndex(
+      tab => tab.id === closedTabId
+    );
     if (tabIndex === -1) {
       throw new Error('Tab not found in recently closed list');
     }
-    
+
     const closedTab = recentlyClosedTabs[tabIndex];
-    
+
     // Create new tab
     const newTab = await chrome.tabs.create({
       url: closedTab.url,
-      windowId: closedTab.windowId
+      windowId: closedTab.windowId,
     });
-    
+
     // Initialize activity for the reopened tab
     tabActivity[newTab.id] = Date.now();
     tabVisitHistory[newTab.id] = Date.now();
-    
+
     // Remove from recently closed list
     recentlyClosedTabs.splice(tabIndex, 1);
     await chrome.storage.local.set({
-      'recentlyClosedTabs': recentlyClosedTabs
+      recentlyClosedTabs: recentlyClosedTabs,
     });
-    
+
     await saveTabActivityToStorage();
-    
+
     console.log(`Reopened tab: ${closedTab.title}`);
     return newTab;
   } catch (error) {
@@ -632,23 +640,23 @@ async function closeTabWithTracking(tabId) {
   try {
     // Get tab info before closing
     const tab = await chrome.tabs.get(tabId);
-    
+
     // Save tab info to recently closed
     await addToRecentlyClosedTabs(tab, 'manually-closed');
-    
+
     // Close the tab
     await chrome.tabs.remove(tabId);
-    
+
     // Clean up tracking data
     delete tabActivity[tabId];
     delete tabVisitHistory[tabId];
-    
+
     if (lastActiveTab === tabId) {
       lastActiveTab = null;
     }
-    
+
     await saveTabActivityToStorage();
-    
+
     console.log(`Manually closed tab with tracking: ${tab.title}`);
     return { tabId, title: tab.title };
   } catch (error) {
@@ -809,8 +817,10 @@ async function cleanupInactiveTabs() {
 
       if (inactiveTime > inactiveThreshold) {
         try {
-          console.log(`Closing tab: ${tab.title} (${inactiveMinutes}min inactive)`);
-          
+          console.log(
+            `Closing tab: ${tab.title} (${inactiveMinutes}min inactive)`
+          );
+
           // Save tab info before closing
           await addToRecentlyClosedTabs(tab, 'auto-closed');
           await chrome.tabs.remove(tab.id);
