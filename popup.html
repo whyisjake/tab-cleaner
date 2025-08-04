@@ -1,261 +1,340 @@
-<!doctype html>
+<!DOCTYPE html>
 <html>
-  <head>
-    <meta charset="utf-8" />
+<head>
+    <meta charset="utf-8">
     <style>
-      body {
-        width: 280px;
-        padding: 16px;
-        margin: 0;
-        font-family:
-          -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
-        font-size: 14px;
-        background-color: #f8f9fa;
-      }
+        body {
+            width: 280px;
+            padding: 16px;
+            margin: 0;
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            font-size: 14px;
+            background-color: #f8f9fa;
+        }
 
-      .header {
-        text-align: center;
-        margin-bottom: 16px;
-        padding-bottom: 12px;
-        border-bottom: 2px solid #e9ecef;
-      }
+        .header {
+            text-align: center;
+            margin-bottom: 16px;
+            padding-bottom: 12px;
+            border-bottom: 2px solid #e9ecef;
+        }
 
-      .extension-name {
-        font-size: 18px;
-        font-weight: 600;
-        color: #2c3e50;
-        margin: 0;
-      }
+        .extension-name {
+            font-size: 18px;
+            font-weight: 600;
+            color: #2c3e50;
+            margin: 0;
+        }
 
-      .chrome-info {
-        font-size: 12px;
-        color: #6c757d;
-        margin: 4px 0 0 0;
-      }
+        .chrome-info {
+            font-size: 12px;
+            color: #6c757d;
+            margin: 4px 0 0 0;
+        }
 
-      .stats-container {
-        background: white;
-        border-radius: 8px;
-        padding: 16px;
-        box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
-        margin-bottom: 12px;
-      }
+        .stats-container {
+            background: white;
+            border-radius: 8px;
+            padding: 16px;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+            margin-bottom: 12px;
+        }
 
-      .stat-item {
-        display: flex;
-        justify-content: space-between;
-        align-items: center;
-        padding: 8px 0;
-        border-bottom: 1px solid #f1f3f4;
-      }
+        .stat-item {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding: 8px 0;
+            border-bottom: 1px solid #f1f3f4;
+        }
 
-      .stat-item:last-child {
-        border-bottom: none;
-      }
+        .stat-item:last-child {
+            border-bottom: none;
+        }
 
-      .stat-label {
-        color: #495057;
-        font-size: 13px;
-      }
+        .stat-label {
+            color: #495057;
+            font-size: 13px;
+        }
 
-      .stat-value {
-        font-weight: 600;
-        color: #2c3e50;
-        font-size: 14px;
-      }
+        .stat-value {
+            font-weight: 600;
+            color: #2c3e50;
+            font-size: 14px;
+        }
 
-      .reset-container {
-        text-align: center;
-        margin-top: 12px;
-      }
+        .reset-container {
+            text-align: center;
+            margin-top: 12px;
+        }
 
-      .reset-btn {
-        background-color: #dc3545;
-        color: white;
-        border: none;
-        padding: 8px 16px;
-        border-radius: 4px;
-        font-size: 12px;
-        cursor: pointer;
-        transition: background-color 0.2s;
-      }
+        .reset-btn {
+            background-color: #dc3545;
+            color: white;
+            border: none;
+            padding: 8px 16px;
+            border-radius: 4px;
+            font-size: 12px;
+            cursor: pointer;
+            transition: background-color 0.2s;
+        }
 
-      .reset-btn:hover {
-        background-color: #c82333;
-      }
+        .reset-btn:hover {
+            background-color: #c82333;
+        }
 
-      .reset-btn:disabled {
-        background-color: #6c757d;
-        cursor: not-allowed;
-      }
+        .reset-btn:disabled {
+            background-color: #6c757d;
+            cursor: not-allowed;
+        }
 
-      .loading {
-        text-align: center;
-        color: #6c757d;
-        padding: 20px;
-        font-style: italic;
-      }
+        .loading {
+            text-align: center;
+            color: #6c757d;
+            padding: 20px;
+            font-style: italic;
+        }
 
-      .error {
-        text-align: center;
-        color: #dc3545;
-        padding: 20px;
-        font-size: 12px;
-      }
+        .error {
+            text-align: center;
+            color: #dc3545;
+            padding: 20px;
+            font-size: 12px;
+        }
 
-      .actions {
-        margin-top: 12px;
-        text-align: center;
-      }
+        .actions {
+            margin-top: 12px;
+            text-align: center;
+        }
 
-      .action-btn {
-        background-color: #007bff;
-        color: white;
-        border: none;
-        padding: 6px 12px;
-        border-radius: 4px;
-        font-size: 12px;
-        cursor: pointer;
-        margin: 0 4px;
-        transition: background-color 0.2s;
-      }
+        .action-btn {
+            background-color: #007bff;
+            color: white;
+            border: none;
+            padding: 6px 12px;
+            border-radius: 4px;
+            font-size: 12px;
+            cursor: pointer;
+            margin: 0 4px;
+            transition: background-color 0.2s;
+        }
 
-      .action-btn:hover {
-        background-color: #0056b3;
-      }
+        .action-btn:hover {
+            background-color: #0056b3;
+        }
 
-      .footer {
-        text-align: center;
-        margin-top: 12px;
-        padding-top: 8px;
-        border-top: 1px solid #e9ecef;
-      }
+        .footer {
+            text-align: center;
+            margin-top: 12px;
+            padding-top: 8px;
+            border-top: 1px solid #e9ecef;
+        }
 
-      .creator-link {
-        font-size: 11px;
-        color: #6c757d;
-        text-decoration: none;
-        transition: color 0.2s;
-      }
+        .creator-link {
+            font-size: 11px;
+            color: #6c757d;
+            text-decoration: none;
+            transition: color 0.2s;
+        }
 
-      .creator-link:hover {
-        color: #007bff;
-      }
+        .creator-link:hover {
+            color: #007bff;
+        }
 
-      .pause-container {
-        background: white;
-        border-radius: 8px;
-        padding: 12px;
-        box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
-        margin-bottom: 12px;
-        text-align: center;
-      }
+        .recently-closed-section {
+            background: white;
+            border-radius: 8px;
+            padding: 16px;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+            margin-bottom: 12px;
+        }
 
-      .pause-toggle {
-        display: flex;
-        align-items: center;
-        justify-content: center;
-        gap: 8px;
-      }
+        .section-title {
+            font-size: 14px;
+            font-weight: 600;
+            color: #2c3e50;
+            margin: 0 0 12px 0;
+        }
 
-      .pause-btn {
-        background-color: #28a745;
-        color: white;
-        border: none;
-        padding: 8px 16px;
-        border-radius: 4px;
-        font-size: 12px;
-        cursor: pointer;
-        transition: background-color 0.2s;
-        font-weight: 500;
-      }
+        .closed-tab-item {
+            display: flex;
+            align-items: center;
+            padding: 8px 0;
+            border-bottom: 1px solid #f1f3f4;
+        }
 
-      .pause-btn:hover {
-        background-color: #218838;
-      }
+        .closed-tab-item:last-child {
+            border-bottom: none;
+        }
 
-      .pause-btn.paused {
-        background-color: #ffc107;
-        color: #212529;
-      }
+        .closed-tab-favicon {
+            width: 16px;
+            height: 16px;
+            margin-right: 8px;
+            flex-shrink: 0;
+        }
 
-      .pause-btn.paused:hover {
-        background-color: #e0a800;
-      }
+        .closed-tab-info {
+            flex-grow: 1;
+            min-width: 0;
+        }
 
-      .pause-status {
-        font-size: 12px;
-        color: #6c757d;
-        margin-top: 4px;
-      }
+        .closed-tab-title {
+            font-size: 12px;
+            color: #2c3e50;
+            white-space: nowrap;
+            overflow: hidden;
+            text-overflow: ellipsis;
+            margin: 0 0 2px 0;
+        }
+
+        .closed-tab-details {
+            font-size: 10px;
+            color: #6c757d;
+        }
+
+        .reopen-btn {
+            background-color: #28a745;
+            color: white;
+            border: none;
+            padding: 4px 8px;
+            border-radius: 3px;
+            font-size: 10px;
+            cursor: pointer;
+            margin-left: 8px;
+            flex-shrink: 0;
+        }
+
+        .reopen-btn:hover {
+            background-color: #218838;
+        }
+
+        .no-recent-tabs {
+            text-align: center;
+            color: #6c757d;
+            font-size: 12px;
+            font-style: italic;
+            padding: 12px 0;
+        }
+
+        .pause-container {
+            background: white;
+            border-radius: 8px;
+            padding: 16px;
+            box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+            margin-bottom: 12px;
+        }
+
+        .pause-toggle {
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            margin-bottom: 8px;
+        }
+
+        .pause-btn {
+            background-color: #28a745;
+            color: white;
+            border: none;
+            padding: 8px 16px;
+            border-radius: 4px;
+            font-size: 12px;
+            cursor: pointer;
+            transition: background-color 0.2s;
+        }
+
+        .pause-btn:hover {
+            background-color: #218838;
+        }
+
+        .pause-btn.paused {
+            background-color: #ffc107;
+            color: #212529;
+        }
+
+        .pause-btn.paused:hover {
+            background-color: #e0a800;
+        }
+
+        .pause-status {
+            font-size: 12px;
+            color: #6c757d;
+            margin-top: 4px;
+        }
     </style>
-  </head>
-  <body>
+</head>
+<body>
     <div class="header">
-      <h1 class="extension-name">Tab Cleaner</h1>
-      <p class="chrome-info" id="chromeInfo">Loading...</p>
+        <h1 class="extension-name">Tab Cleaner</h1>
+        <p class="chrome-info" id="chromeInfo">Loading...</p>
     </div>
 
     <div class="pause-container">
-      <div class="pause-toggle">
-        <button class="pause-btn" id="pauseBtn">⏸️ Pause Cleaning</button>
-      </div>
-      <div class="pause-status" id="pauseStatus">Cleaning is active</div>
+        <div class="pause-toggle">
+            <button class="pause-btn" id="pauseBtn">⏸️ Pause Cleaning</button>
+        </div>
+        <div class="pause-status" id="pauseStatus">Cleaning is active</div>
     </div>
 
-    <div id="loadingMessage" class="loading">Loading statistics...</div>
-
-    <div id="errorMessage" class="error" style="display: none">
-      Error loading statistics
+    <div id="loadingMessage" class="loading">
+        Loading statistics...
     </div>
 
-    <div id="statsContainer" style="display: none">
-      <div class="stats-container">
-        <div class="stat-item">
-          <span class="stat-label">Open windows</span>
-          <span class="stat-value" id="openWindows">-</span>
-        </div>
-        <div class="stat-item">
-          <span class="stat-label">Open tabs</span>
-          <span class="stat-value" id="openTabs">-</span>
-        </div>
-        <div class="stat-item">
-          <span class="stat-label">Current window tabs</span>
-          <span class="stat-value" id="currentWindowTabs">-</span>
-        </div>
-        <div class="stat-item">
-          <span class="stat-label">Current window pinned</span>
-          <span class="stat-value" id="currentWindowPinned">-</span>
-        </div>
-        <div class="stat-item">
-          <span class="stat-label">All-time tabs removed</span>
-          <span class="stat-value" id="tabsRemoved">-</span>
-        </div>
-        <div class="stat-item">
-          <span class="stat-label">Max concurrent tabs</span>
-          <span class="stat-value" id="maxConcurrentTabs">-</span>
-        </div>
-      </div>
+    <div id="errorMessage" class="error" style="display: none;">
+        Error loading statistics
+    </div>
 
-      <div class="actions">
-        <button class="action-btn" id="refreshBtn">Refresh</button>
-        <button class="action-btn" id="openOptionsBtn">Options</button>
-      </div>
+    <div id="statsContainer" style="display: none;">
+        <div class="stats-container">
+            <div class="stat-item">
+                <span class="stat-label">Open windows</span>
+                <span class="stat-value" id="openWindows">-</span>
+            </div>
+            <div class="stat-item">
+                <span class="stat-label">Open tabs</span>
+                <span class="stat-value" id="openTabs">-</span>
+            </div>
+            <div class="stat-item">
+                <span class="stat-label">Current window tabs</span>
+                <span class="stat-value" id="currentWindowTabs">-</span>
+            </div>
+            <div class="stat-item">
+                <span class="stat-label">Current window pinned</span>
+                <span class="stat-value" id="currentWindowPinned">-</span>
+            </div>
+            <div class="stat-item">
+                <span class="stat-label">All-time tabs removed</span>
+                <span class="stat-value" id="tabsRemoved">-</span>
+            </div>
+            <div class="stat-item">
+                <span class="stat-label">Max concurrent tabs</span>
+                <span class="stat-value" id="maxConcurrentTabs">-</span>
+            </div>
+        </div>
 
-      <div class="reset-container">
-        <button class="reset-btn" id="resetBtn">Reset Statistics</button>
-      </div>
+        <div class="actions">
+            <button class="action-btn" id="refreshBtn">Refresh</button>
+            <button class="action-btn" id="openOptionsBtn">Options</button>
+        </div>
+
+        <div class="reset-container">
+            <button class="reset-btn" id="resetBtn">Reset Statistics</button>
+        </div>
+    </div>
+
+    <div id="recentlyClosedContainer" style="display: none;">
+        <div class="recently-closed-section">
+            <h3 class="section-title">Recently Closed Tabs</h3>
+            <div id="recentlyClosedList">
+                <div class="no-recent-tabs">No recently closed tabs</div>
+            </div>
+        </div>
     </div>
 
     <div class="footer">
-      <a
-        href="https://twitter.com/whyisjake"
-        class="creator-link"
-        target="_blank"
-        >Created by Jake Spurlock</a
-      >
+        <a href="https://twitter.com/whyisjake" class="creator-link" target="_blank">Created by Jake Spurlock</a>
     </div>
 
     <script src="popup.js"></script>
-  </body>
+</body>
 </html>

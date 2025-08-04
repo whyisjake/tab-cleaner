@@ -1,5 +1,7 @@
 # Tab Cleaner
 
+[![Publish to Chrome Web Store](https://github.com/whyisjake/tab-cleaner/actions/workflows/publish-extension.yml/badge.svg)](https://github.com/whyisjake/tab-cleaner/actions/workflows/publish-extension.yml)
+
 A Chrome extension that automatically closes inactive tabs to keep your browser clean, fast, and organized.
 
 **[📖 Read the launch blog post →](https://jakespurlock.com/2025/07/introducing-tab-cleaner-automatic-tab-management-for-chrome/)**
@@ -165,9 +167,27 @@ This project is licensed under the MIT License - see the [LICENSE](LICENSE) file
 
 ## Changelog
 
+### Version 1.0.7
+- **Improved**: Production builds now automatically remove console.log statements
+- **Enhanced**: Cleaner Chrome Web Store releases with optimized JavaScript
+
+### Version 1.0.6
+- **Added**: GitHub Actions workflow for automated Chrome Web Store publishing
+- **Added**: Automated GitHub releases with version tags
+- **Improved**: Development and deployment workflow automation
+
+### Version 1.0.5
+- **Added**: Comprehensive build system with package management
+- **Added**: Chrome Web Store automation scripts
+- **Improved**: Development tooling and validation
+
+### Version 1.0.4
+- **Added**: Recently closed tabs restoration feature
+- **Improved**: Tab management functionality
+
 ### Version 1.0.1
 - **Fixed**: Tab activity tracking now properly monitors all open tabs
-- **Fixed**: Improved tab cleanup timing accuracy 
+- **Fixed**: Improved tab cleanup timing accuracy
 - **Fixed**: Enhanced persistence of activity data across browser sessions
 - **Added**: Twitter link in popup and options pages
 - **Improved**: More reliable service worker background processing

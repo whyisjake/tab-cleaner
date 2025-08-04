@@ -48,11 +48,15 @@ async function loadStatistics() {
     // Load persistent statistics
     await loadPersistentStats();
 
-    showStats();
-  } catch (error) {
-    console.error('Error loading statistics:', error);
-    showError();
-  }
+        // Load recently closed tabs
+        await loadRecentlyClosedTabs();
+
+        showStats();
+
+    } catch (error) {
+        console.error('Error loading statistics:', error);
+        showError();
+    }
 }
 
 // Load Chrome browser information
@@ -197,9 +201,10 @@ function showLoading() {
 
 // Show statistics
 function showStats() {
-  document.getElementById('loadingMessage').style.display = 'none';
-  document.getElementById('errorMessage').style.display = 'none';
-  document.getElementById('statsContainer').style.display = 'block';
+    document.getElementById('loadingMessage').style.display = 'none';
+    document.getElementById('errorMessage').style.display = 'none';
+    document.getElementById('statsContainer').style.display = 'block';
+    document.getElementById('recentlyClosedContainer').style.display = 'block';
 }
 
 // Show error state
@@ -257,4 +262,123 @@ function updatePauseUI(isPaused) {
     pauseBtn.classList.remove('paused');
     pauseStatus.textContent = 'Cleaning is active';
   }
+}
+
+// Load recently closed tabs
+async function loadRecentlyClosedTabs() {
+    try {
+        const response = await chrome.runtime.sendMessage({ action: 'getRecentlyClosedTabs' });
+        const recentlyClosedTabs = response.recentlyClosedTabs || [];
+        
+        displayRecentlyClosedTabs(recentlyClosedTabs);
+    } catch (error) {
+        console.error('Error loading recently closed tabs:', error);
+        displayRecentlyClosedTabs([]);
+    }
+}
+
+// Display recently closed tabs in the UI
+function displayRecentlyClosedTabs(tabs) {
+    const container = document.getElementById('recentlyClosedList');
+    
+    if (!tabs || tabs.length === 0) {
+        container.innerHTML = '<div class="no-recent-tabs">No recently closed tabs</div>';
+        return;
+    }
+    
+    // Show only the most recent 5 tabs
+    const recentTabs = tabs.slice(0, 5);
+    
+    // Clear container and build elements properly
+    container.innerHTML = '';
+    
+    recentTabs.forEach(tab => {
+        const timeSinceClosed = formatTimeSince(tab.closedAt);
+        const fallbackFavicon = 'data:image/svg+xml,<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 16 16"><rect width="16" height="16" fill="%23ccc"/></svg>';
+        
+        // Create elements properly to avoid HTML injection issues
+        const itemDiv = document.createElement('div');
+        itemDiv.className = 'closed-tab-item';
+        
+        const favicon = document.createElement('img');
+        favicon.className = 'closed-tab-favicon';
+        favicon.src = tab.favIconUrl || fallbackFavicon;
+        favicon.alt = '';
+        favicon.onerror = function() { this.src = fallbackFavicon; };
+        
+        const infoDiv = document.createElement('div');
+        infoDiv.className = 'closed-tab-info';
+        
+        const titleDiv = document.createElement('div');
+        titleDiv.className = 'closed-tab-title';
+        titleDiv.textContent = tab.title;
+        titleDiv.title = tab.title;
+        
+        const detailsDiv = document.createElement('div');
+        detailsDiv.className = 'closed-tab-details';
+        detailsDiv.textContent = `${timeSinceClosed} • ${tab.reason}`;
+        
+        const reopenBtn = document.createElement('button');
+        reopenBtn.className = 'reopen-btn';
+        reopenBtn.textContent = 'Reopen';
+        reopenBtn.onclick = () => reopenTab(tab.id);
+        
+        // Assemble the structure
+        infoDiv.appendChild(titleDiv);
+        infoDiv.appendChild(detailsDiv);
+        itemDiv.appendChild(favicon);
+        itemDiv.appendChild(infoDiv);
+        itemDiv.appendChild(reopenBtn);
+        container.appendChild(itemDiv);
+    });
+}
+
+// Reopen a closed tab
+async function reopenTab(tabId) {
+    try {
+        const response = await chrome.runtime.sendMessage({ 
+            action: 'reopenTab', 
+            tabId: tabId 
+        });
+        
+        if (response.success) {
+            console.log('Tab reopened successfully');
+            // Refresh the recently closed tabs list
+            await loadRecentlyClosedTabs();
+            // Also refresh statistics
+            await loadTabStatistics();
+        } else {
+            console.error('Failed to reopen tab:', response.error);
+            alert('Failed to reopen tab: ' + response.error);
+        }
+    } catch (error) {
+        console.error('Error reopening tab:', error);
+        alert('Error reopening tab. Please try again.');
+    }
+}
+
+// Format time since closed
+function formatTimeSince(timestamp) {
+    const now = Date.now();
+    const diff = now - timestamp;
+    const minutes = Math.floor(diff / (1000 * 60));
+    const hours = Math.floor(diff / (1000 * 60 * 60));
+    const days = Math.floor(diff / (1000 * 60 * 60 * 24));
+    
+    if (days > 0) {
+        return `${days} day${days > 1 ? 's' : ''} ago`;
+    } else if (hours > 0) {
+        return `${hours} hour${hours > 1 ? 's' : ''} ago`;
+    } else if (minutes > 0) {
+        return `${minutes} minute${minutes > 1 ? 's' : ''} ago`;
+    } else {
+        return 'Just now';
+    }
+}
+
+// Escape HTML to prevent XSS
+function escapeHtml(text) {
+    const div = document.createElement('div');
+    div.textContent = text;
+    return div.innerHTML;
 }

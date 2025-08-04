@@ -1,15 +1,55 @@
 {
   "name": "tab-cleaner",
-  "version": "1.0.2",
-  "description": "Automatically closes inactive tabs to keep your browser clean and fast",
+  "version": "1.0.4",
+  "description": "Automatically closes inactive tabs to keep your browser clean and fast. Track tab activity and set custom timeouts.",
+  "main": "background.js",
   "scripts": {
+    "build": "npm run clean && npm run copy-files && npm run package",
+    "clean": "rm -rf dist/",
+    "copy-files": "mkdir -p dist && cp manifest.json background.js popup.html popup.js options.html options.js dist/ && cp -r icons dist/",
+    "package": "cd dist && zip -r ../tab-cleaner-v$(node -p \"require('../package.json').version\").zip .",
+    "dev": "npm run copy-files",
+    "validate": "npm run validate-manifest && npm run lint",
+    "validate-manifest": "node scripts/validate-manifest.js",
+    "lint": "prettier --check .",
     "format": "prettier --write .",
     "format:check": "prettier --check .",
-    "lint": "prettier --check ."
+    "version-bump": "npm version patch && npm run sync-version",
+    "sync-version": "node scripts/sync-version.js",
+    "version-bump:minor": "npm version minor && npm run sync-version", 
+    "version-bump:major": "npm version major && npm run sync-version",
+    "prepare-release": "npm run version-bump && npm run build",
+    "publish-release": "npm run prepare-release && git push origin main --follow-tags",
+    "webstore:upload": "echo 'Use GitHub Actions: Publish to Chrome Web Store (manual trigger, draft mode)'",
+    "webstore:publish": "echo 'Use GitHub Actions: Publish to Chrome Web Store (manual trigger, publish mode)'"
+  },
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/whyisjake/tab-cleaner.git"
+  },
+  "keywords": [
+    "chrome-extension",
+    "tab-management",
+    "browser-productivity",
+    "tab-cleaner"
+  ],
+  "author": "Jake Spurlock",
+  "license": "MIT",
+  "homepage": "https://github.com/whyisjake/tab-cleaner",
+  "bugs": {
+    "url": "https://github.com/whyisjake/tab-cleaner/issues"
+  },
+  "engines": {
+    "node": ">=14.0.0"
   },
   "devDependencies": {
     "prettier": "^3.0.0"
   },
-  "author": "Jake Spurlock",
-  "private": true
+  "extensionInfo": {
+    "manifestVersion": 3,
+    "chromeWebStore": {
+      "extensionId": "feaijgcpimfkndpbpcfchipkjojimjim",
+      "publisherEmail": ""
+    }
+  }
 }

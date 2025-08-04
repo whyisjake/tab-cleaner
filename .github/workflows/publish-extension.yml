@@ -1,0 +1,93 @@
+name: Publish to Chrome Web Store
+
+on:
+  push:
+    tags:
+      - 'v*'  # Trigger on version tags like v1.0.5
+  workflow_dispatch:  # Allow manual trigger
+    inputs:
+      publish:
+        description: 'Publish to store (true) or just upload as draft (false)'
+        required: true
+        default: 'false'
+        type: choice
+        options:
+          - 'true'
+          - 'false'
+
+jobs:
+  publish:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+      
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+
+    - name: Get version from manifest
+      id: version
+      run: |
+        if [ "${{ github.event_name }}" = "push" ]; then
+          echo "version=${GITHUB_REF#refs/tags/v}" >> $GITHUB_OUTPUT
+        else
+          echo "version=$(grep -o '"version": "[^"]*"' manifest.json | cut -d'"' -f4)" >> $GITHUB_OUTPUT
+        fi
+
+    - name: Remove console.log statements
+      run: |
+        # Create a temporary build directory
+        mkdir -p dist
+        
+        # Copy all files except git/github directories
+        rsync -av --exclude='.git*' --exclude='.github*' --exclude='README.md' --exclude='CLAUDE.md' --exclude='dist' . dist/
+        
+        # Remove console.log statements from JavaScript files
+        find dist -name "*.js" -type f -exec sed -i 's/console\.log([^;]*);*//g' {} \;
+        
+        # Clean up any empty lines left behind
+        find dist -name "*.js" -type f -exec sed -i '/^[[:space:]]*$/N;/^\n$/d' {} \;
+
+    - name: Create release zip
+      run: |
+        cd dist
+        zip -r ../tab-cleaner-v${{ steps.version.outputs.version }}.zip .
+
+    - name: Upload to Chrome Web Store
+      uses: mnao305/chrome-extension-upload@v5.0.0
+      with:
+        file-path: './tab-cleaner-v${{ steps.version.outputs.version }}.zip'
+        extension-id: ${{ secrets.CHROME_EXTENSION_ID }}
+        client-id: ${{ secrets.CHROME_CLIENT_ID }}
+        client-secret: ${{ secrets.CHROME_CLIENT_SECRET }}
+        refresh-token: ${{ secrets.CHROME_REFRESH_TOKEN }}
+        publish: ${{ github.event_name == 'push' || github.event.inputs.publish == 'true' }}
+
+    - name: Upload release artifact
+      uses: actions/upload-artifact@v4
+      with:
+        name: extension-v${{ steps.version.outputs.version }}
+        path: './tab-cleaner-v${{ steps.version.outputs.version }}.zip'
+        retention-days: 30
+
+    - name: Create GitHub Release
+      if: github.event_name == 'push'
+      uses: softprops/action-gh-release@v1
+      with:
+        files: './tab-cleaner-v${{ steps.version.outputs.version }}.zip'
+        generate_release_notes: true
+        draft: false
+        prerelease: false
+      env:
+        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+    - name: Notify success
+      if: success()
+      run: |
+        echo "🎉 Extension successfully uploaded to Chrome Web Store!"
+        echo "Version: v${{ steps.version.outputs.version }}"
+        if [ "${{ github.event_name }}" = "push" ] || [ "${{ github.event.inputs.publish }}" = "true" ]; then
+          echo "Status: Published for review"
+        else
+          echo "Status: Uploaded as draft"
+        fi
