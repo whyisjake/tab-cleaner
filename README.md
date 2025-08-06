@@ -167,6 +167,15 @@ This project is licensed under the MIT License - see the [LICENSE](LICENSE) file
 
 ## Changelog
 
+### Version 1.1.0
+- **Added**: Pause/Resume functionality - Users can pause tab cleanup from the popup
+- **Added**: Visual pause indicators - Badge turns yellow when paused, button updates accordingly
+- **Added**: Code formatting with Prettier - Consistent code style across the project
+- **Added**: Recently closed tabs feature - View and reopen recently closed tabs from popup
+- **Improved**: Enhanced popup UI with pause controls and recently closed tabs section
+- **Improved**: Tab management system now tracks both auto-closed and manually closed tabs
+- **Fixed**: Console.log statements are now properly removed in production builds
+
 ### Version 1.0.7
 - **Improved**: Production builds now automatically remove console.log statements
 - **Enhanced**: Cleaner Chrome Web Store releases with optimized JavaScript

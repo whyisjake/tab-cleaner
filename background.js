@@ -14,6 +14,9 @@ let lastActiveTab = null;
 // Track recently closed tabs for recovery
 let recentlyClosedTabs = [];
 
+// Pause state
+let isPaused = false;
+
 // Initialize extension
 chrome.runtime.onInstalled.addListener(() => {
   console.log('Tab Cleaner extension installed');
@@ -30,6 +33,9 @@ chrome.runtime.onInstalled.addListener(() => {
   // Set up keepalive
   setupKeepalive();
   
+  // Load pause state
+  loadPauseState();
+  
   // Update badge with initial tab count
   updateTabCountBadge();
 });
@@ -41,6 +47,7 @@ chrome.runtime.onStartup.addListener(() => {
   initializeExistingTabs();
   loadRecentlyClosedTabs();
   setupKeepalive();
+  loadPauseState();
   updateTabCountBadge();
 });
 
@@ -150,6 +157,13 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
       sendResponse({ success: false, error: error.message });
     });
     return true; // Keep message channel open for async response  
+  }
+  
+  if (message.action === 'pauseStateChanged') {
+    console.log('Pause state changed:', message.paused);
+    isPaused = message.paused;
+    updateIconForPauseState(isPaused);
+    return false;
   }
   
   console.log('Unknown message action:', message.action);
@@ -636,6 +650,11 @@ async function ensureAllTabsTracked() {
 // Main cleanup function
 async function cleanupInactiveTabs() {
   try {
+    // Check if cleaning is paused
+    if (isPaused) {
+      console.log('Cleanup skipped - cleaning is paused');
+      return;
+    }
     // First ensure all tabs are being tracked
     await ensureAllTabsTracked();
     
@@ -736,19 +755,25 @@ async function updateTabCountBadge() {
       text: tabCount.toString()
     });
     
-    // Set badge color based on tab count
-    let badgeColor = '#4CAF50'; // Green for normal count
-    if (tabCount > 50) {
-      badgeColor = '#FF9800'; // Orange for high count
-    }
-    if (tabCount > 100) {
-      badgeColor = '#F44336'; // Red for very high count
+    // Set badge color based on pause state and tab count
+    let badgeColor;
+    if (isPaused) {
+      badgeColor = '#ffc107'; // Yellow for paused
+    } else {
+      badgeColor = '#4CAF50'; // Green for normal count
+      if (tabCount > 50) {
+        badgeColor = '#FF9800'; // Orange for high count
+      }
+      if (tabCount > 100) {
+        badgeColor = '#F44336'; // Red for very high count
+      }
     }
     
     await chrome.action.setBadgeBackgroundColor({
       color: badgeColor
     });
     
+    console.log(`Badge color set to ${badgeColor} (paused: ${isPaused})`);
     console.log(`Successfully updated badge: ${tabCount} tabs with color ${badgeColor}`);
     
   } catch (error) {
@@ -761,5 +786,47 @@ async function updateTabCountBadge() {
     } catch (fallbackError) {
       console.error('Fallback badge update also failed:', fallbackError);
     }
+  }
+}
+
+// Load pause state from storage
+async function loadPauseState() {
+  try {
+    const result = await chrome.storage.local.get(['cleaningPaused']);
+    isPaused = result.cleaningPaused || false;
+    updateIconForPauseState(isPaused);
+    console.log('Loaded pause state:', isPaused);
+  } catch (error) {
+    console.error('Error loading pause state:', error);
+  }
+}
+
+// Update icon based on pause state
+function updateIconForPauseState(paused) {
+  try {
+    const iconPath = paused
+      ? {
+          16: 'icons/icon16.png',
+          32: 'icons/icon32.png',
+          48: 'icons/icon48.png',
+          128: 'icons/icon128.png'
+        }
+      : {
+          16: 'icons/icon16.png',
+          32: 'icons/icon32.png',
+          48: 'icons/icon48.png',
+          128: 'icons/icon128.png'
+        };
+
+    // For now, we'll use the same icons but with different badge color
+    // In the future, you could create grayscale versions for paused state
+    chrome.action.setIcon({ path: iconPath });
+
+    // Update badge to reflect pause state
+    updateTabCountBadge();
+
+    console.log(`Icon updated for ${paused ? 'paused' : 'active'} state`);
+  } catch (error) {
+    console.error('Error updating icon:', error);
   }
 }
