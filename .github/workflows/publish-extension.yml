@@ -20,7 +20,7 @@ jobs:
     runs-on: ubuntu-latest
     permissions:
       contents: write
-      
+
     steps:
     - name: Checkout code
       uses: actions/checkout@v4
@@ -38,15 +38,9 @@ jobs:
       run: |
         # Create a temporary build directory
         mkdir -p dist
-        
+
         # Copy all files except git/github directories
         rsync -av --exclude='.git*' --exclude='.github*' --exclude='README.md' --exclude='CLAUDE.md' --exclude='dist' . dist/
-        
-        # Remove console.log statements from JavaScript files
-        find dist -name "*.js" -type f -exec sed -i 's/console\.log([^;]*);*//g' {} \;
-        
-        # Clean up any empty lines left behind
-        find dist -name "*.js" -type f -exec sed -i '/^[[:space:]]*$/N;/^\n$/d' {} \;
 
     - name: Create release zip
       run: |
