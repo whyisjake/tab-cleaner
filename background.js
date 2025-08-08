@@ -180,21 +180,40 @@ async function getTabsData() {
     const activeTabId = activeTab[0]?.id;
 
     return tabs.map(tab => {
-      const lastActivity = tabActivity[tab.id] || now;
-      const inactiveTime = now - lastActivity;
-      const minutesInactive = Math.floor(inactiveTime / (1000 * 60));
-      const hoursInactive = (inactiveTime / (1000 * 60 * 60)).toFixed(1);
+      // Use stored activity data - don't default to now for display
+      const lastActivity = tabActivity[tab.id];
+      let inactiveTime, minutesInactive, hoursInactive;
+      
+      if (lastActivity && lastActivity !== 'newly_discovered') {
+        inactiveTime = now - lastActivity;
+        minutesInactive = Math.floor(inactiveTime / (1000 * 60));
+        hoursInactive = (inactiveTime / (1000 * 60 * 60)).toFixed(1);
+      } else {
+        // No tracking data available or newly discovered
+        inactiveTime = 0;
+        minutesInactive = 0;
+        hoursInactive = 0;
+      }
       
       let status = 'safe';
-      let statusText = `Active ${minutesInactive}m ago`;
+      let statusText;
+      
+      // Handle tabs without tracking data or newly discovered tabs
+      if (!lastActivity) {
+        statusText = 'Not tracked yet';
+      } else if (lastActivity === 'newly_discovered') {
+        statusText = 'Tracking started';
+      } else {
+        statusText = `Active ${minutesInactive}m ago`;
+      }
       
       if (tab.id === activeTabId) {
         status = 'safe';
         statusText = 'Currently Active';
-      } else if (inactiveTime > inactiveThreshold * 0.8) {
+      } else if (lastActivity && inactiveTime > inactiveThreshold * 0.8) {
         status = 'danger';
         statusText = `Will close soon (${hoursInactive}h inactive)`;
-      } else if (inactiveTime > inactiveThreshold * 0.5) {
+      } else if (lastActivity && inactiveTime > inactiveThreshold * 0.5) {
         status = 'warning';
         statusText = `${hoursInactive}h inactive`;
       }
@@ -332,31 +351,51 @@ async function getTabsDataWithCustomTracking() {
     console.log('Current tab visit history:', tabVisitHistory);
 
     return tabs.map(tab => {
-      // Use our custom tracking data
-      const lastActivity = tabActivity[tab.id] || now;
-      const inactiveTime = now - lastActivity;
-      const minutesInactive = Math.floor(inactiveTime / (1000 * 60));
-      const hoursInactive = (inactiveTime / (1000 * 60 * 60)).toFixed(1);
+      // Use our custom tracking data - don't default to now for display
+      const lastActivity = tabActivity[tab.id];
+      let inactiveTime, minutesInactive, hoursInactive;
       
-      console.log(`Tab ${tab.id} (${tab.title.substring(0, 30)}...): last activity ${new Date(lastActivity).toLocaleTimeString()}, inactive for ${minutesInactive}m`);
+      if (lastActivity && lastActivity !== 'newly_discovered') {
+        inactiveTime = now - lastActivity;
+        minutesInactive = Math.floor(inactiveTime / (1000 * 60));
+        hoursInactive = (inactiveTime / (1000 * 60 * 60)).toFixed(1);
+        console.log(`Tab ${tab.id} (${tab.title.substring(0, 30)}...): last activity ${new Date(lastActivity).toLocaleTimeString()}, inactive for ${minutesInactive}m`);
+      } else {
+        // No tracking data available or newly discovered
+        inactiveTime = 0;
+        minutesInactive = 0;
+        hoursInactive = 0;
+        if (lastActivity === 'newly_discovered') {
+          console.log(`Tab ${tab.id} (${tab.title.substring(0, 30)}...): newly discovered, tracking started`);
+        } else {
+          console.log(`Tab ${tab.id} (${tab.title.substring(0, 30)}...): no tracking data available`);
+        }
+      }
       
       let status = 'safe';
       let statusText;
       
-      // Format time display - switch to hours after 120 minutes
-      if (minutesInactive >= 120) {
-        statusText = `Active ${hoursInactive}h ago`;
+      // Handle tabs without tracking data or newly discovered tabs
+      if (!lastActivity) {
+        statusText = 'Not tracked yet';
+      } else if (lastActivity === 'newly_discovered') {
+        statusText = 'Tracking started';
       } else {
-        statusText = `Active ${minutesInactive}m ago`;
+        // Format time display - switch to hours after 120 minutes
+        if (minutesInactive >= 120) {
+          statusText = `Active ${hoursInactive}h ago`;
+        } else {
+          statusText = `Active ${minutesInactive}m ago`;
+        }
       }
       
       if (tab.id === activeTabId) {
         status = 'safe';
         statusText = 'Currently Active';
-      } else if (inactiveTime > inactiveThreshold * 0.8) {
+      } else if (lastActivity && inactiveTime > inactiveThreshold * 0.8) {
         status = 'danger';
         statusText = `Will close soon (${hoursInactive}h inactive)`;
-      } else if (inactiveTime > inactiveThreshold * 0.5) {
+      } else if (lastActivity && inactiveTime > inactiveThreshold * 0.5) {
         status = 'warning';
         statusText = `${hoursInactive}h inactive`;
       }
@@ -438,13 +477,11 @@ async function initializeExistingTabs() {
         tabVisitHistory[tab.id] = savedActivity[tab.id];
         console.log(`Tab ${tab.id}: Using saved activity from ${new Date(savedActivity[tab.id]).toLocaleTimeString()}`);
       } else {
-        // For unknown tabs, estimate age based on when extension was installed
-        // Set their last activity to current time to prevent premature closure
-        // This gives them a fresh start from when tracking begins
-        const estimatedLastActivity = now;
-        tabActivity[tab.id] = estimatedLastActivity;
-        tabVisitHistory[tab.id] = estimatedLastActivity;
-        console.log(`Tab ${tab.id}: New tab, estimated last activity ${new Date(estimatedLastActivity).toLocaleTimeString()}`);
+        // For unknown tabs, mark them as newly discovered
+        // Use a special marker to indicate tracking just started
+        tabActivity[tab.id] = 'newly_discovered';
+        tabVisitHistory[tab.id] = now; // Use current time for visit history to prevent premature closure
+        console.log(`Tab ${tab.id}: Newly discovered tab, tracking started`);
       }
       
       if (activeTab.length > 0 && tab.id === activeTab[0].id) {
@@ -492,7 +529,7 @@ async function addToRecentlyClosedTabs(tab, reason = 'auto-closed') {
       windowId: tab.windowId,
       closedAt: Date.now(),
       reason: reason,
-      inactiveTime: tabActivity[tab.id] ? Date.now() - tabActivity[tab.id] : 0
+      inactiveTime: (tabActivity[tab.id] && tabActivity[tab.id] !== 'newly_discovered') ? Date.now() - tabActivity[tab.id] : 0
     };
 
     recentlyClosedTabs.unshift(closedTabInfo);
@@ -683,8 +720,8 @@ async function cleanupInactiveTabs() {
       }
 
       const lastActivity = tabActivity[tab.id];
-      if (!lastActivity) {
-        console.log(`Tab ${tab.id} has no activity data - skipping`);
+      if (!lastActivity || lastActivity === 'newly_discovered') {
+        console.log(`Tab ${tab.id} has no activity data or is newly discovered - skipping`);
         continue;
       }
       
