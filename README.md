@@ -167,6 +167,12 @@ This project is licensed under the MIT License - see the [LICENSE](LICENSE) file
 
 ## Changelog
 
+### Version 1.2.0
+- **Fixed**: Tab Activity Monitor now shows accurate activity times instead of misleading "0m ago" for all tabs
+- **Improved**: Newly discovered tabs show "Tracking started" until first genuine activity
+- **Improved**: Better handling of tabs without tracking data with clear "Not tracked yet" status
+- **Enhanced**: More reliable tab activity tracking prevents premature closure of newly discovered tabs
+
 ### Version 1.1.0
 - **Added**: Pause/Resume functionality - Users can pause tab cleanup from the popup
 - **Added**: Visual pause indicators - Badge turns yellow when paused, button updates accordingly
