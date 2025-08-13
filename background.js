@@ -17,157 +17,280 @@ let recentlyClosedTabs = [];
 // Pause state
 let isPaused = false;
 
+// Service worker state tracking
+let isInitialized = false;
+let lastKeepalive = Date.now();
+
+// Initialize immediately when service worker starts
+console.log('Service worker starting up...');
+// Delay initialization slightly to ensure all functions are loaded
+setTimeout(() => {
+  ensureServiceWorkerInitialized().catch(error => {
+    console.error('Failed to initialize service worker on startup:', error);
+  });
+}, 100);
+
 // Initialize extension
-chrome.runtime.onInstalled.addListener(() => {
+chrome.runtime.onInstalled.addListener(async () => {
   console.log('Tab Cleaner extension installed');
-  
-  // Load settings and create alarm
-  loadSettingsAndCreateAlarm();
-  
-  // Initialize activity tracking for existing tabs
-  initializeExistingTabs();
-  
-  // Load recently closed tabs
-  loadRecentlyClosedTabs();
-  
-  // Set up keepalive
-  setupKeepalive();
-  
-  // Load pause state
-  loadPauseState();
-  
-  // Update badge with initial tab count
-  updateTabCountBadge();
+  await ensureServiceWorkerInitialized();
 });
 
 // Also initialize on startup
-chrome.runtime.onStartup.addListener(() => {
+chrome.runtime.onStartup.addListener(async () => {
   console.log('Tab Cleaner extension started');
-  loadSettingsAndCreateAlarm();
-  initializeExistingTabs();
-  loadRecentlyClosedTabs();
-  setupKeepalive();
-  loadPauseState();
-  updateTabCountBadge();
+  await ensureServiceWorkerInitialized();
 });
 
-// Keep service worker alive
-function setupKeepalive() {
-  // Create a keepalive alarm that fires every 4 minutes
-  chrome.alarms.create('keepalive', {
-    delayInMinutes: 1,
-    periodInMinutes: 4
+// Enhanced service worker initialization and persistence
+async function ensureServiceWorkerInitialized() {
+  if (isInitialized) {
+    console.log('Service worker already initialized');
+    return;
+  }
+  
+  console.log('Initializing service worker...');
+  
+  try {
+    // Load all persistent data first with individual error handling
+    try {
+      await loadTabActivityFromStorage();
+      console.log('✓ Tab activity loaded');
+    } catch (error) {
+      console.error('Failed to load tab activity:', error);
+    }
+    
+    try {
+      await loadSettingsAndCreateAlarm();
+      console.log('✓ Settings loaded');
+    } catch (error) {
+      console.error('Failed to load settings:', error);
+    }
+    
+    try {
+      await loadRecentlyClosedTabs();
+      console.log('✓ Recently closed tabs loaded');
+    } catch (error) {
+      console.error('Failed to load recently closed tabs:', error);
+    }
+    
+    try {
+      await loadPauseState();
+      console.log('✓ Pause state loaded');
+    } catch (error) {
+      console.error('Failed to load pause state:', error);
+    }
+    
+    // Initialize tracking for existing tabs
+    try {
+      await initializeExistingTabs();
+      console.log('✓ Existing tabs initialized');
+    } catch (error) {
+      console.error('Failed to initialize existing tabs:', error);
+    }
+    
+    // Set up enhanced keepalive
+    try {
+      setupEnhancedKeepalive();
+      console.log('✓ Keepalive setup complete');
+    } catch (error) {
+      console.error('Failed to setup keepalive:', error);
+    }
+    
+    // Update badge
+    try {
+      await updateTabCountBadge();
+      console.log('✓ Badge updated');
+    } catch (error) {
+      console.error('Failed to update badge:', error);
+    }
+    
+    isInitialized = true;
+    console.log('Service worker initialization complete');
+  } catch (error) {
+    console.error('Service worker initialization failed:', error);
+    // Don't set isInitialized to true if there was a major error
+  }
+}
+
+// Enhanced keepalive system
+function setupEnhancedKeepalive() {
+  // Create multiple alarms for redundancy
+  chrome.alarms.create('keepalive-primary', {
+    delayInMinutes: 0.5,
+    periodInMinutes: 1
   });
   
-  console.log('Keepalive alarm created');
+  chrome.alarms.create('keepalive-backup', {
+    delayInMinutes: 1,
+    periodInMinutes: 2
+  });
+  
+  console.log('Enhanced keepalive alarms created');
+}
+
+// Load tab activity from storage on service worker restart
+async function loadTabActivityFromStorage() {
+  try {
+    const result = await chrome.storage.local.get([
+      'backgroundTabActivity',
+      'backgroundLastActiveTab', 
+      'backgroundActivityTimestamp'
+    ]);
+    
+    if (result.backgroundTabActivity) {
+      tabActivity = result.backgroundTabActivity;
+      console.log(`Restored tab activity for ${Object.keys(tabActivity).length} tabs`);
+    }
+    
+    if (result.backgroundLastActiveTab) {
+      lastActiveTab = result.backgroundLastActiveTab;
+    }
+    
+    // Check how recent the data is
+    if (result.backgroundActivityTimestamp) {
+      const dataAge = Date.now() - result.backgroundActivityTimestamp;
+      console.log(`Tab activity data age: ${Math.floor(dataAge / 1000)}s`);
+    }
+    
+  } catch (error) {
+    console.error('Failed to load tab activity from storage:', error);
+  }
 }
 
 // Add immediate response to ensure service worker responds quickly
-chrome.runtime.onConnect.addListener((port) => {
+chrome.runtime.onConnect.addListener(async (port) => {
+  await ensureServiceWorkerInitialized();
   console.log('Port connected:', port.name);
-  port.onMessage.addListener((message) => {
+  port.onMessage.addListener(async (message) => {
     console.log('Port message received:', message);
     if (message.action === 'ping') {
+      lastKeepalive = Date.now();
       port.postMessage({ action: 'pong', timestamp: Date.now() });
     }
   });
 });
 
 // Load settings from storage and create alarm
-function loadSettingsAndCreateAlarm() {
-  chrome.storage.sync.get({
-    inactiveTime: 60,
-    checkInterval: 5,
-    ignorePinned: true,
-    ignoreAudible: true
-  }, function(items) {
+async function loadSettingsAndCreateAlarm() {
+  try {
+    const items = await chrome.storage.sync.get({
+      inactiveTime: 60,
+      checkInterval: 5,
+      ignorePinned: true,
+      ignoreAudible: true
+    });
+    
     settings = items;
     console.log('Loaded settings:', settings);
     
     // Clear existing alarm and create new one with updated interval
-    chrome.alarms.clear('cleanupTabs', () => {
-      chrome.alarms.create('cleanupTabs', {
-        delayInMinutes: settings.checkInterval,
-        periodInMinutes: settings.checkInterval
-      });
-      console.log('Created alarm with interval:', settings.checkInterval, 'minutes');
+    await chrome.alarms.clear('cleanupTabs');
+    chrome.alarms.create('cleanupTabs', {
+      delayInMinutes: settings.checkInterval,
+      periodInMinutes: settings.checkInterval
     });
-  });
+    console.log('Created alarm with interval:', settings.checkInterval, 'minutes');
+  } catch (error) {
+    console.error('Failed to load settings:', error);
+  }
 }
 
-// Handle messages from options page
+// Simple message handler that works immediately
 chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
   console.log('Background script received message:', message);
   
-  if (message.action === 'updateSettings') {
-    console.log('Updating settings:', message.settings);
-    settings = message.settings;
-    
-    // Update alarm with new interval
-    chrome.alarms.clear('cleanupTabs', () => {
-      chrome.alarms.create('cleanupTabs', {
-        delayInMinutes: settings.checkInterval,
-        periodInMinutes: settings.checkInterval
-      });
-    });
-    return false; // No async response needed
+  // Handle simple messages first without async complexity
+  if (message.action === 'ping') {
+    console.log('Ping received');
+    sendResponse({ pong: true, timestamp: Date.now() });
+    return false; // Synchronous response
   }
   
-  if (message.action === 'getTabsData') {
-    console.log('Getting tabs data...');
-    getTabsDataWithCustomTracking().then(tabsData => {
-      console.log('Sending tabs data:', tabsData.length, 'tabs');
-      sendResponse({ tabsData: tabsData });
-    }).catch(error => {
-      console.error('Error getting tabs data:', error);
-      sendResponse({ tabsData: [], error: error.message });
-    });
-    return true; // Keep message channel open for async response
-  }
+  // Handle async messages
+  (async () => {
+    try {
+      console.log('Processing async message:', message.action);
+      
+      // Only initialize if needed for complex operations
+      if (message.action !== 'updateBadge' && message.action !== 'getRecentlyClosedTabs') {
+        console.log('Ensuring service worker is initialized...');
+        await ensureServiceWorkerInitialized();
+        console.log('Service worker initialization check complete');
+      }
+      
+      if (message.action === 'updateSettings') {
+        console.log('Updating settings:', message.settings);
+        settings = message.settings;
+        
+        // Update alarm with new interval
+        await chrome.alarms.clear('cleanupTabs');
+        chrome.alarms.create('cleanupTabs', {
+          delayInMinutes: settings.checkInterval,
+          periodInMinutes: settings.checkInterval
+        });
+        sendResponse({ success: true });
+        return;
+      }
+      
+      if (message.action === 'getTabsData') {
+        console.log('Getting tabs data...');
+        const tabsData = await getTabsDataWithCustomTracking();
+        console.log('Sending tabs data:', tabsData.length, 'tabs');
+        sendResponse({ tabsData: tabsData });
+        return;
+      }
+      
+      if (message.action === 'updateBadge') {
+        console.log('Manual badge update requested');
+        try {
+          const tabs = await chrome.tabs.query({});
+          await chrome.action.setBadgeText({ text: tabs.length.toString() });
+          sendResponse({ success: true });
+        } catch (error) {
+          console.error('Badge update error:', error);
+          sendResponse({ error: error.message });
+        }
+        return;
+      }
+      
+      if (message.action === 'getRecentlyClosedTabs') {
+        console.log('Getting recently closed tabs...');
+        sendResponse({ recentlyClosedTabs: recentlyClosedTabs || [] });
+        return;
+      }
+      
+      if (message.action === 'reopenTab') {
+        console.log('Reopening tab:', message.tabId);
+        const newTab = await reopenClosedTab(message.tabId);
+        sendResponse({ success: true, newTab: newTab });
+        return;
+      }
+      
+      if (message.action === 'closeTabWithTracking') {
+        console.log('Manually closing tab with tracking:', message.tabId);
+        const result = await closeTabWithTracking(message.tabId);
+        sendResponse({ success: true, result: result });
+        return;
+      }
+      
+      if (message.action === 'pauseStateChanged') {
+        console.log('Pause state changed:', message.paused);
+        isPaused = message.paused;
+        sendResponse({ success: true });
+        return;
+      }
+      
+      console.log('Unknown message action:', message.action);
+      sendResponse({ error: 'Unknown action' });
+      
+    } catch (error) {
+      console.error('Message handler error:', error);
+      sendResponse({ error: error.message });
+    }
+  })();
   
-  if (message.action === 'updateBadge') {
-    console.log('Manual badge update requested');
-    updateTabCountBadge();
-    return false;
-  }
-  
-  if (message.action === 'getRecentlyClosedTabs') {
-    console.log('Getting recently closed tabs...');
-    sendResponse({ recentlyClosedTabs: recentlyClosedTabs });
-    return false;
-  }
-  
-  if (message.action === 'reopenTab') {
-    console.log('Reopening tab:', message.tabId);
-    reopenClosedTab(message.tabId).then(newTab => {
-      sendResponse({ success: true, newTab: newTab });
-    }).catch(error => {
-      console.error('Error reopening tab:', error);
-      sendResponse({ success: false, error: error.message });
-    });
-    return true; // Keep message channel open for async response
-  }
-  
-  if (message.action === 'closeTabWithTracking') {
-    console.log('Manually closing tab with tracking:', message.tabId);
-    closeTabWithTracking(message.tabId).then(result => {
-      sendResponse({ success: true, result: result });
-    }).catch(error => {
-      console.error('Error closing tab with tracking:', error);
-      sendResponse({ success: false, error: error.message });
-    });
-    return true; // Keep message channel open for async response  
-  }
-  
-  if (message.action === 'pauseStateChanged') {
-    console.log('Pause state changed:', message.paused);
-    isPaused = message.paused;
-    updateIconForPauseState(isPaused);
-    return false;
-  }
-  
-  console.log('Unknown message action:', message.action);
-  return false; // No response needed for other messages
+  return true; // Return true for async message handling
 });
 
 // Get tabs data with activity information
@@ -268,7 +391,9 @@ async function getTabsData() {
 }
 
 // Track tab activity with custom system
-chrome.tabs.onActivated.addListener((activeInfo) => {
+chrome.tabs.onActivated.addListener(async (activeInfo) => {
+  await ensureServiceWorkerInitialized();
+  
   const now = Date.now();
   console.log('Tab activated:', activeInfo.tabId, 'at', new Date(now).toLocaleTimeString());
   
@@ -281,40 +406,52 @@ chrome.tabs.onActivated.addListener((activeInfo) => {
   tabVisitHistory[activeInfo.tabId] = now;
   tabActivity[activeInfo.tabId] = now;
   lastActiveTab = activeInfo.tabId;
+  lastKeepalive = now;
   
   // Save activity data
-  saveTabActivityToStorage();
+  await saveTabActivityToStorage();
 });
 
-chrome.tabs.onUpdated.addListener((tabId, changeInfo, tab) => {
+chrome.tabs.onUpdated.addListener(async (tabId, changeInfo, tab) => {
   if (changeInfo.status === 'complete' || changeInfo.url) {
+    await ensureServiceWorkerInitialized();
+    
     const now = Date.now();
     console.log('Tab updated:', tabId, changeInfo, 'at', new Date(now).toLocaleTimeString());
     
     // Only update activity if this is the active tab
-    chrome.tabs.query({ active: true, currentWindow: true }, (activeTabs) => {
+    try {
+      const activeTabs = await chrome.tabs.query({ active: true, currentWindow: true });
       if (activeTabs.length > 0 && activeTabs[0].id === tabId) {
         tabVisitHistory[tabId] = now;
         tabActivity[tabId] = now;
+        lastKeepalive = now;
         console.log('Updated activity for active tab:', tabId);
         // Save activity data
-        saveTabActivityToStorage();
+        await saveTabActivityToStorage();
       }
-    });
+    } catch (error) {
+      console.error('Error updating tab activity:', error);
+    }
   }
 });
 
-chrome.tabs.onCreated.addListener((tab) => {
+chrome.tabs.onCreated.addListener(async (tab) => {
+  await ensureServiceWorkerInitialized();
+  
   console.log('Tab created:', tab.id);
   // Initialize activity for new tab
   const now = Date.now();
   tabActivity[tab.id] = now;
   tabVisitHistory[tab.id] = now;
-  saveTabActivityToStorage();
-  updateTabCountBadge();
+  lastKeepalive = now;
+  await saveTabActivityToStorage();
+  await updateTabCountBadge();
 });
 
-chrome.tabs.onRemoved.addListener((tabId) => {
+chrome.tabs.onRemoved.addListener(async (tabId) => {
+  await ensureServiceWorkerInitialized();
+  
   console.log('Tab removed:', tabId);
   delete tabActivity[tabId];
   delete tabVisitHistory[tabId];
@@ -323,18 +460,27 @@ chrome.tabs.onRemoved.addListener((tabId) => {
     lastActiveTab = null;
   }
   
-  saveTabActivityToStorage();
-  updateTabCountBadge();
+  lastKeepalive = Date.now();
+  await saveTabActivityToStorage();
+  await updateTabCountBadge();
 });
 
 // Handle alarm for cleanup and keepalive
-chrome.alarms.onAlarm.addListener((alarm) => {
+chrome.alarms.onAlarm.addListener(async (alarm) => {
   if (alarm.name === 'cleanupTabs') {
     console.log('Running cleanup alarm');
-    cleanupInactiveTabs();
-  } else if (alarm.name === 'keepalive') {
-    console.log('Keepalive alarm fired - service worker staying active');
-    // Just logging keeps the service worker active
+    await ensureServiceWorkerInitialized();
+    await cleanupInactiveTabs();
+  } else if (alarm.name.startsWith('keepalive')) {
+    const now = Date.now();
+    console.log(`${alarm.name} fired - service worker staying active`);
+    lastKeepalive = now;
+    
+    // Ensure we're initialized
+    await ensureServiceWorkerInitialized();
+    
+    // Periodically save current state to prevent data loss
+    await saveTabActivityToStorage();
   }
 });
 
@@ -505,16 +651,30 @@ async function initializeExistingTabs() {
   }
 }
 
-// Save tab activity to storage
+// Save tab activity to storage with enhanced error handling
 async function saveTabActivityToStorage() {
   try {
-    await chrome.storage.local.set({
+    const dataToSave = {
       'backgroundTabActivity': tabActivity,
       'backgroundLastActiveTab': lastActiveTab,
-      'backgroundActivityTimestamp': Date.now()
-    });
+      'backgroundActivityTimestamp': Date.now(),
+      'backgroundKeepaliveTimestamp': lastKeepalive
+    };
+    
+    await chrome.storage.local.set(dataToSave);
+    console.log(`Saved activity data for ${Object.keys(tabActivity).length} tabs`);
   } catch (error) {
     console.error('Failed to save tab activity:', error);
+    // Try a backup save with minimal data
+    try {
+      await chrome.storage.local.set({
+        'backgroundTabActivity': tabActivity,
+        'backgroundActivityTimestamp': Date.now()
+      });
+      console.log('Backup save successful');
+    } catch (backupError) {
+      console.error('Backup save also failed:', backupError);
+    }
   }
 }
 
@@ -632,6 +792,32 @@ async function closeTabWithTracking(tabId) {
     throw error;
   }
 }
+
+// Add window focus tracking for better activity detection
+chrome.windows.onFocusChanged.addListener(async (windowId) => {
+  if (windowId === chrome.windows.WINDOW_ID_NONE) {
+    console.log('All windows lost focus');
+    return;
+  }
+  
+  await ensureServiceWorkerInitialized();
+  
+  try {
+    const tabs = await chrome.tabs.query({ active: true, windowId: windowId });
+    if (tabs.length > 0) {
+      const now = Date.now();
+      const tabId = tabs[0].id;
+      tabActivity[tabId] = now;
+      tabVisitHistory[tabId] = now;
+      lastActiveTab = tabId;
+      lastKeepalive = now;
+      console.log('Window focus changed - updated activity for tab:', tabId);
+      await saveTabActivityToStorage();
+    }
+  } catch (error) {
+    console.error('Error handling window focus change:', error);
+  }
+});
 
 // Ensure all current tabs are being tracked
 async function ensureAllTabsTracked() {
