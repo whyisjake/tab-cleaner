@@ -10,6 +10,7 @@ Place your Chrome Web Store screenshots in this directory.
 3. **`options-settings.png`** - Settings page showing customization options
 4. **`badge-demo.png`** - Extension icon with tab count badge visible
 5. **`tab-activity-status.png`** - Tab list showing different activity statuses (safe/warning/danger)
+6. **`dark-mode.png`** - Popup and settings page in dark mode
 
 ## Screenshot Requirements
 
