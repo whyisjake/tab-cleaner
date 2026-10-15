@@ -21,6 +21,7 @@
     "version-bump:major": "npm version major && npm run sync-version",
     "prepare-release": "npm run version-bump && npm run build",
     "publish-release": "npm run prepare-release && git push origin main --follow-tags",
+    "webstore:auth": "node scripts/webstore-auth.js",
     "webstore:upload": "echo 'Use GitHub Actions: Publish to Chrome Web Store (manual trigger, draft mode)'",
     "webstore:publish": "echo 'Use GitHub Actions: Publish to Chrome Web Store (manual trigger, publish mode)'"
   },
