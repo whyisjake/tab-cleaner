@@ -159,7 +159,10 @@ tab-cleaner/
 ├── popup.js            # Popup functionality
 ├── options.html        # Settings page
 ├── options.js          # Settings functionality
-├── icons/              # Extension icons
+├── ui.css              # Shared design tokens and components (light and dark)
+├── popup.css           # Popup layout
+├── options.css         # Settings page layout
+├── icons/              # Extension icons and social link sprite (social.svg)
 └── README.md           # This file
 ```
 
@@ -168,6 +171,13 @@ tab-cleaner/
 This project is licensed under the MIT License - see the [LICENSE](LICENSE) file for details.
 
 ## Changelog
+
+### Unreleased
+- **New**: Redesigned popup and settings page with a shared, modern look
+- **New**: Dark mode that follows your system setting
+- **New**: Links to the author's GitHub, X, Instagram, Facebook and website in the popup and settings page
+- **Improved**: Pinned, audio and active markers in the tab monitor stay visible on long titles
+- **Fixed**: Refreshing the popup no longer leaves the recently closed list showing under the loading or error message
 
 ### Version 1.2.2
 - **Improved**: The store package now contains only the files the extension loads (10 files, about 24 KB, down from 40 files and about 800 KB)

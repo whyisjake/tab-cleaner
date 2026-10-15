@@ -1,0 +1,208 @@
+/* Options page layout. Tokens and shared components come from ui.css. */
+
+.page {
+  max-width: 680px;
+  margin: 0 auto;
+  padding: var(--space-5) var(--space-4);
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-4);
+}
+
+.page-header {
+  padding: var(--space-2) 0;
+}
+
+.page-header .brand-name {
+  font-size: var(--text-xl);
+}
+
+.card {
+  padding: var(--space-5);
+}
+
+.card-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-3);
+  margin-bottom: var(--space-3);
+}
+
+/* Settings rows */
+
+.settings-list {
+  display: flex;
+  flex-direction: column;
+}
+
+.setting-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-4);
+  padding: var(--space-3) 0;
+  border-bottom: 1px solid var(--border);
+}
+
+.setting-row:first-child {
+  padding-top: 0;
+}
+
+.setting-label {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+}
+
+.setting-label label {
+  font-weight: 500;
+}
+
+.setting-help {
+  font-size: var(--text-sm);
+  color: var(--text-muted);
+}
+
+.setting-control {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  flex-shrink: 0;
+}
+
+.setting-control input {
+  width: 88px;
+}
+
+/* Fixed width so the number inputs line up whatever the unit word */
+.setting-unit {
+  min-width: 52px;
+  font-size: var(--text-base);
+  color: var(--text-muted);
+}
+
+.setting-check {
+  justify-content: flex-start;
+  gap: var(--space-3);
+  cursor: pointer;
+}
+
+.settings-actions {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+  min-height: 32px;
+  margin-top: var(--space-4);
+}
+
+/* Hidden until a save completes; options.js toggles style.display */
+.status {
+  display: none;
+}
+
+/* Tab activity monitor */
+
+.tab-stats {
+  margin-bottom: var(--space-3);
+  padding: var(--space-2) var(--space-3);
+  border-left: 3px solid var(--accent);
+  border-radius: var(--radius-sm);
+  background: var(--surface-2);
+  font-size: var(--text-base);
+  color: var(--text-muted);
+}
+
+.tabs-container {
+  max-height: 420px;
+  overflow-y: auto;
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+}
+
+.tab-item {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+  padding: var(--space-3);
+  border-bottom: 1px solid var(--border);
+}
+
+.tab-item:last-child {
+  border-bottom: none;
+}
+
+.tab-icon {
+  flex-shrink: 0;
+  width: 20px;
+  text-align: center;
+  font-size: var(--text-md);
+}
+
+.tab-info {
+  flex: 1;
+  min-width: 0;
+}
+
+.tab-title {
+  font-weight: 500;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.tab-url {
+  font-size: var(--text-sm);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.tab-markers {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-1);
+  margin-top: var(--space-1);
+}
+
+.tab-markers .badge {
+  font-size: var(--text-xs);
+}
+
+.tab-actions {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  flex-wrap: wrap;
+  gap: var(--space-2);
+  flex: 0 1 auto;
+  min-width: 0;
+  max-width: 45%;
+}
+
+.tab-status {
+  min-width: 0;
+  white-space: normal;
+  text-align: center;
+}
+
+.close-tab-btn {
+  min-width: 52px;
+}
+
+.page > .site-footer {
+  padding: var(--space-2) 0 var(--space-4);
+}
+
+@media (max-width: 480px) {
+  .card {
+    padding: var(--space-4);
+  }
+
+  .setting-row:not(.setting-check) {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: var(--space-2);
+  }
+}
