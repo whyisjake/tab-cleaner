@@ -34,18 +34,14 @@ jobs:
           echo "version=$(grep -o '"version": "[^"]*"' manifest.json | cut -d'"' -f4)" >> $GITHUB_OUTPUT
         fi
 
-    - name: Remove console.log statements
+    # Packages only the files the extension loads (see copy-files in package.json)
+    - name: Build extension package
       run: |
-        # Create a temporary build directory
-        mkdir -p dist
-
-        # Copy all files except git/github directories
-        rsync -av --exclude='.git*' --exclude='.github*' --exclude='README.md' --exclude='CLAUDE.md' --exclude='dist' . dist/
-
-    - name: Create release zip
-      run: |
-        cd dist
-        zip -r ../tab-cleaner-v${{ steps.version.outputs.version }}.zip .
+        npm run build
+        test -f tab-cleaner-v${{ steps.version.outputs.version }}.zip || {
+          echo "::error::Expected tab-cleaner-v${{ steps.version.outputs.version }}.zip; package.json version may not match"
+          exit 1
+        }
 
     - name: Upload to Chrome Web Store
       uses: mnao305/chrome-extension-upload@v7.0.0
