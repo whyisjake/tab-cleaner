@@ -169,6 +169,9 @@ This project is licensed under the MIT License - see the [LICENSE](LICENSE) file
 
 ## Changelog
 
+### Version 1.2.2
+- **Improved**: The store package now contains only the files the extension loads (10 files, about 24 KB, down from 40 files and about 800 KB)
+
 ### Version 1.2.1
 - **Fixed**: The "Close tabs after" setting was ignored once the browser restarted the background service worker, so tabs closed after the 1-hour default instead
 - **Fixed**: Tabs restored after a browser restart are now closed once they pass the inactive limit; before, they stayed open until you visited them

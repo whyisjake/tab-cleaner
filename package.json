@@ -1,6 +1,6 @@
 {
   "name": "tab-cleaner",
-  "version": "1.2.1",
+  "version": "1.2.2",
   "description": "Automatically closes inactive tabs to keep your browser clean and fast. Track tab activity and set custom timeouts.",
   "main": "background.js",
   "scripts": {
