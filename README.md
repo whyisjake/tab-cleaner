@@ -172,7 +172,7 @@ This project is licensed under the MIT License - see the [LICENSE](LICENSE) file
 
 ## Changelog
 
-### Unreleased
+### Version 1.3.0
 - **New**: Redesigned popup and settings page with a shared, modern look
 - **New**: Dark mode that follows your system setting
 - **New**: Links to the author's GitHub, X, Instagram, Facebook and website in the popup and settings page
