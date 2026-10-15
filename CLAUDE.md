@@ -21,7 +21,7 @@ npm test
 npm run test:coverage   # fails below 100% line/branch/function coverage of background.js
 ```
 
-Tests in `tests/` load a fresh `background.js` into a `vm` context per test with an in-memory `chrome` mock (`tests/helpers/chrome-mock.js`), so each test is one service worker lifetime. Use `failOnce` to inject API failures. popup.js and options.js are not covered.
+Tests in `tests/` load a fresh `background.js` into a `vm` context per test with an in-memory `chrome` mock (`tests/helpers/chrome-mock.js`), so each test is one service worker lifetime. Use `failOnce` to inject API failures. popup.js and options.js are not covered. `tests/package.test.js` rebuilds `dist/` and fails if a file the manifest or pages reference is missing from the store package, so add new assets to `copy-files` in package.json.
 
 ## Architecture
 
@@ -73,7 +73,10 @@ Tests in `tests/` load a fresh `background.js` into a `vm` context per test with
 ├── background.js       # Service worker (main logic)
 ├── popup.html/js       # Statistics popup
 ├── options.html/js     # Settings page
-└── icons/             # Extension icons (16, 32, 48, 128px)
+├── ui.css             # Shared design tokens and components (light and dark)
+├── popup.css          # Popup layout
+├── options.css        # Settings page layout
+└── icons/             # Extension icons (16, 32, 48, 128px) and social.svg sprite
 ```
 
 ## Development Notes
