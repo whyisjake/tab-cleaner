@@ -194,7 +194,7 @@ function displayTabs(tabs) {
                 </div>
                 <div class="tab-actions">
                     <div class="tab-status badge ${escapeHtml(tab.status)}">${escapeHtml(tab.statusText)}</div>
-                    <button class="close-tab-btn btn btn-danger btn-sm" data-tab-id="${tab.id}" aria-label="Close ${title}" ${closeButtonDisabled}>
+                    <button class="close-tab-btn btn btn-danger btn-sm" data-tab-id="${tab.id}" aria-label="${closeButtonText} ${title}" ${closeButtonDisabled}>
                         ${closeButtonText}
                     </button>
                 </div>

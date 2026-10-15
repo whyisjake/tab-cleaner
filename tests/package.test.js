@@ -53,6 +53,17 @@ describe('store package', () => {
     });
   }
 
+  for (const page of PAGES) {
+    it(`finds every sprite icon ${page} uses`, () => {
+      const html = fs.readFileSync(path.join(ROOT, page), 'utf8');
+      const uses = [...html.matchAll(/<use\s+href=["']([^"'#]+)#([^"']+)["']/g)];
+      const missing = uses
+        .filter(([, file, id]) => !fs.readFileSync(path.join(DIST, file), 'utf8').includes(`id="${id}"`))
+        .map(([, file, id]) => `${file}#${id}`);
+      assert.deepEqual(missing, [], `${page} uses sprite ids that do not exist: ${missing.join(', ')}`);
+    });
+  }
+
   it('ignores remote URLs, fragments and queries when collecting references', () => {
     const html = [
       '<link rel="stylesheet" href="ui.css?v=2">',
