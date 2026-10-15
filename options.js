@@ -125,7 +125,7 @@ async function wakeUpServiceWorker() {
 // Refresh tabs list using background script data
 async function refreshTabsList() {
     const container = document.getElementById('tabsContainer');
-    container.innerHTML = '<div style="padding: 20px; text-align: center; color: #666;">Loading tabs...</div>';
+    container.innerHTML = '<div class="empty-state">Loading tabs...</div>';
 
     try {
         // Wake up service worker to ensure it's running
@@ -143,12 +143,12 @@ async function refreshTabsList() {
             updateTabStats(response.tabsData);
         } else {
             console.error('Failed to get tabs data from background script:', response);
-            container.innerHTML = '<div style="padding: 20px; text-align: center; color: #666;">Error loading tabs data. Try refreshing.</div>';
+            container.innerHTML = '<div class="empty-state error">Error loading tabs data. Try refreshing.</div>';
         }
 
     } catch (error) {
         console.error('Error refreshing tabs list:', error);
-        container.innerHTML = '<div style="padding: 20px; text-align: center; color: #666;">Error: ' + error.message + '</div>';
+        container.innerHTML = '<div class="empty-state error">Error: ' + escapeHtml(error.message) + '</div>';
     }
 }
 
@@ -159,7 +159,7 @@ function displayTabs(tabs) {
     const container = document.getElementById('tabsContainer');
 
     if (tabs.length === 0) {
-        container.innerHTML = '<div style="padding: 20px; text-align: center; color: #666;">No tabs found</div>';
+        container.innerHTML = '<div class="empty-state">No tabs found</div>';
         return;
     }
 
@@ -175,20 +175,24 @@ function displayTabs(tabs) {
         const closeButtonText = tab.active ? 'Active' : 'Close';
         const closeButtonDisabled = !canClose ? 'disabled' : '';
 
+        // Markers sit outside the truncated title so they stay visible
+        const markers = [
+            tab.pinned ? '<span class="badge">📌 Pinned</span>' : '',
+            tab.audible ? '<span class="badge">🔊 Audio</span>' : '',
+            tab.active ? '<span class="badge accent">Active</span>' : ''
+        ].join('');
+
         return `
             <div class="tab-item">
+                <span class="tab-icon" aria-hidden="true">${icon}</span>
                 <div class="tab-info">
-                    <div class="tab-title">
-                        <span style="margin-right: 8px; font-size: 14px;">${icon}</span>${escapeHtml(tab.title)}
-                        ${tab.pinned ? ' 📌' : ''}
-                        ${tab.audible ? ' 🔊' : ''}
-                        ${tab.active ? ' (Active)' : ''}
-                    </div>
-                    <div class="tab-url">${escapeHtml(tab.url)}</div>
+                    <div class="tab-title">${escapeHtml(tab.title)}</div>
+                    <div class="tab-url muted">${escapeHtml(tab.url)}</div>
+                    ${markers ? `<div class="tab-markers">${markers}</div>` : ''}
                 </div>
-                <div style="display: flex; align-items: center; gap: 8px;">
-                    <div class="tab-status ${tab.status}">${escapeHtml(tab.statusText)}</div>
-                    <button class="close-tab-btn" data-tab-id="${tab.id}" ${closeButtonDisabled}>
+                <div class="tab-actions">
+                    <div class="tab-status badge ${escapeHtml(tab.status)}">${escapeHtml(tab.statusText)}</div>
+                    <button class="close-tab-btn btn btn-danger btn-sm" data-tab-id="${tab.id}" aria-label="Close ${escapeHtml(tab.title)}" ${closeButtonDisabled}>
                         ${closeButtonText}
                     </button>
                 </div>
@@ -300,9 +304,9 @@ function updateTabStats(tabsData) {
     statsElement.textContent = statsText;
 }
 
-// Escape HTML to prevent XSS
+// Escape HTML to prevent XSS (quotes too, so values are safe inside attributes)
 function escapeHtml(text) {
     const div = document.createElement('div');
     div.textContent = text;
-    return div.innerHTML;
+    return div.innerHTML.replace(/"/g, '&quot;').replace(/'/g, '&#39;');
 }

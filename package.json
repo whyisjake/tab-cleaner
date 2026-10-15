@@ -6,7 +6,7 @@
   "scripts": {
     "build": "npm run clean && npm run copy-files && npm run package",
     "clean": "rm -rf dist/",
-    "copy-files": "mkdir -p dist/icons && cp manifest.json background.js popup.html popup.js options.html options.js ui.css dist/ && cp icons/icon16.png icons/icon32.png icons/icon48.png icons/icon128.png icons/social.svg dist/icons/",
+    "copy-files": "mkdir -p dist/icons && cp manifest.json background.js popup.html popup.js options.html options.js ui.css popup.css options.css dist/ && cp icons/icon16.png icons/icon32.png icons/icon48.png icons/icon128.png icons/social.svg dist/icons/",
     "package": "cd dist && zip -r ../tab-cleaner-v$(node -p \"require('../package.json').version\").zip .",
     "dev": "npm run copy-files",
     "validate": "npm run validate-manifest && npm run lint",

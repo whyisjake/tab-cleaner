@@ -181,6 +181,7 @@ function showLoading() {
     document.getElementById('loadingMessage').style.display = 'block';
     document.getElementById('errorMessage').style.display = 'none';
     document.getElementById('statsContainer').style.display = 'none';
+    document.getElementById('recentlyClosedContainer').style.display = 'none';
 }
 
 // Show statistics
@@ -196,6 +197,7 @@ function showError() {
     document.getElementById('loadingMessage').style.display = 'none';
     document.getElementById('errorMessage').style.display = 'block';
     document.getElementById('statsContainer').style.display = 'none';
+    document.getElementById('recentlyClosedContainer').style.display = 'none';
 }
 
 // Load recently closed tabs
@@ -216,7 +218,7 @@ function displayRecentlyClosedTabs(tabs) {
     const container = document.getElementById('recentlyClosedList');
     
     if (!tabs || tabs.length === 0) {
-        container.innerHTML = '<div class="no-recent-tabs">No recently closed tabs</div>';
+        container.innerHTML = '<div class="empty-state">No recently closed tabs</div>';
         return;
     }
     
@@ -228,17 +230,12 @@ function displayRecentlyClosedTabs(tabs) {
     
     recentTabs.forEach(tab => {
         const timeSinceClosed = formatTimeSince(tab.closedAt);
-        const fallbackFavicon = 'data:image/svg+xml,<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 16 16"><rect width="16" height="16" fill="%23ccc"/></svg>';
         
         // Create elements properly to avoid HTML injection issues
         const itemDiv = document.createElement('div');
         itemDiv.className = 'closed-tab-item';
         
-        const favicon = document.createElement('img');
-        favicon.className = 'closed-tab-favicon';
-        favicon.src = tab.favIconUrl || fallbackFavicon;
-        favicon.alt = '';
-        favicon.onerror = function() { this.src = fallbackFavicon; };
+        const favicon = tab.favIconUrl ? createFavicon(tab.favIconUrl) : createFaviconPlaceholder();
         
         const infoDiv = document.createElement('div');
         infoDiv.className = 'closed-tab-info';
@@ -253,8 +250,10 @@ function displayRecentlyClosedTabs(tabs) {
         detailsDiv.textContent = `${timeSinceClosed} • ${tab.reason}`;
         
         const reopenBtn = document.createElement('button');
-        reopenBtn.className = 'reopen-btn';
+        reopenBtn.type = 'button';
+        reopenBtn.className = 'btn btn-secondary btn-sm';
         reopenBtn.textContent = 'Reopen';
+        reopenBtn.setAttribute('aria-label', `Reopen ${tab.title}`);
         reopenBtn.onclick = () => reopenTab(tab.id);
         
         // Assemble the structure
@@ -265,6 +264,23 @@ function displayRecentlyClosedTabs(tabs) {
         itemDiv.appendChild(reopenBtn);
         container.appendChild(itemDiv);
     });
+}
+
+// Favicon image; swaps itself for a neutral placeholder tile if it fails to load
+function createFavicon(url) {
+    const img = document.createElement('img');
+    img.className = 'favicon';
+    img.src = url;
+    img.alt = '';
+    img.onerror = function() { this.replaceWith(createFaviconPlaceholder()); };
+    return img;
+}
+
+function createFaviconPlaceholder() {
+    const span = document.createElement('span');
+    span.className = 'favicon-placeholder';
+    span.setAttribute('aria-hidden', 'true');
+    return span;
 }
 
 // Reopen a closed tab
