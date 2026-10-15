@@ -167,6 +167,12 @@ This project is licensed under the MIT License - see the [LICENSE](LICENSE) file
 
 ## Changelog
 
+### Version 1.2.1
+- **Fixed**: The "Close tabs after" setting was ignored once the browser restarted the background service worker, so tabs closed after the 1-hour default instead
+- **Fixed**: Tabs restored after a browser restart are now closed once they pass the inactive limit; before, they stayed open until you visited them
+- **Fixed**: Overlapping service worker startups no longer overwrite fresh tab activity
+- **Improved**: Settings changes apply immediately without waiting for the next check
+
 ### Version 1.2.0
 - **Fixed**: Tab Activity Monitor now shows accurate activity times instead of misleading "0m ago" for all tabs
 - **Improved**: Newly discovered tabs show "Tracking started" until first genuine activity

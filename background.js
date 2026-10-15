@@ -25,9 +25,7 @@ let lastKeepalive = Date.now();
 console.log('Service worker starting up...');
 // Delay initialization slightly to ensure all functions are loaded
 setTimeout(() => {
-  ensureServiceWorkerInitialized().catch(error => {
-    console.error('Failed to initialize service worker on startup:', error);
-  });
+  ensureServiceWorkerInitialized();
 }, 100);
 
 // Initialize extension
@@ -43,74 +41,43 @@ chrome.runtime.onStartup.addListener(async () => {
 });
 
 // Enhanced service worker initialization and persistence
-async function ensureServiceWorkerInitialized() {
+// Concurrent callers share one in-flight initialization so a second event
+// can't reload stored activity over timestamps the first one just recorded.
+let initializationPromise = null;
+
+function ensureServiceWorkerInitialized() {
   if (isInitialized) {
-    console.log('Service worker already initialized');
-    return;
+    return Promise.resolve();
   }
-  
+  if (!initializationPromise) {
+    initializationPromise = initializeServiceWorker().finally(() => {
+      initializationPromise = null;
+    });
+  }
+  return initializationPromise;
+}
+
+async function initializeServiceWorker() {
   console.log('Initializing service worker...');
   
+  // Each loader catches and logs its own errors, so one failing
+  // step never stops the rest from running
+  await loadTabActivityFromStorage();
+  await loadSettingsAndCreateAlarm();
+  await loadRecentlyClosedTabs();
+  await loadPauseState();
+  await initializeExistingTabs();
+  
   try {
-    // Load all persistent data first with individual error handling
-    try {
-      await loadTabActivityFromStorage();
-      console.log('✓ Tab activity loaded');
-    } catch (error) {
-      console.error('Failed to load tab activity:', error);
-    }
-    
-    try {
-      await loadSettingsAndCreateAlarm();
-      console.log('✓ Settings loaded');
-    } catch (error) {
-      console.error('Failed to load settings:', error);
-    }
-    
-    try {
-      await loadRecentlyClosedTabs();
-      console.log('✓ Recently closed tabs loaded');
-    } catch (error) {
-      console.error('Failed to load recently closed tabs:', error);
-    }
-    
-    try {
-      await loadPauseState();
-      console.log('✓ Pause state loaded');
-    } catch (error) {
-      console.error('Failed to load pause state:', error);
-    }
-    
-    // Initialize tracking for existing tabs
-    try {
-      await initializeExistingTabs();
-      console.log('✓ Existing tabs initialized');
-    } catch (error) {
-      console.error('Failed to initialize existing tabs:', error);
-    }
-    
-    // Set up enhanced keepalive
-    try {
-      setupEnhancedKeepalive();
-      console.log('✓ Keepalive setup complete');
-    } catch (error) {
-      console.error('Failed to setup keepalive:', error);
-    }
-    
-    // Update badge
-    try {
-      await updateTabCountBadge();
-      console.log('✓ Badge updated');
-    } catch (error) {
-      console.error('Failed to update badge:', error);
-    }
-    
-    isInitialized = true;
-    console.log('Service worker initialization complete');
+    setupEnhancedKeepalive();
   } catch (error) {
-    console.error('Service worker initialization failed:', error);
-    // Don't set isInitialized to true if there was a major error
+    console.error('Failed to setup keepalive:', error);
   }
+  
+  await updateTabCountBadge();
+  
+  isInitialized = true;
+  console.log('Service worker initialization complete');
 }
 
 // Enhanced keepalive system
@@ -139,8 +106,19 @@ async function loadTabActivityFromStorage() {
     ]);
     
     if (result.backgroundTabActivity) {
-      tabActivity = result.backgroundTabActivity;
-      console.log(`Restored tab activity for ${Object.keys(tabActivity).length} tabs`);
+      // Validate and clean the loaded tab activity data
+      const rawActivity = result.backgroundTabActivity;
+      tabActivity = {};
+      
+      Object.entries(rawActivity).forEach(([tabId, timestamp]) => {
+        if (typeof timestamp === 'number' && !isNaN(timestamp) && timestamp > 0) {
+          tabActivity[tabId] = timestamp;
+        } else {
+          console.log(`Skipping invalid timestamp for tab ${tabId}: ${timestamp} (type: ${typeof timestamp})`);
+        }
+      });
+      
+      console.log(`Restored tab activity for ${Object.keys(tabActivity).length} tabs (filtered from ${Object.keys(rawActivity).length})`);
     }
     
     if (result.backgroundLastActiveTab) {
@@ -171,18 +149,33 @@ chrome.runtime.onConnect.addListener(async (port) => {
   });
 });
 
+// Load settings from storage
+async function loadSettings() {
+  settings = await chrome.storage.sync.get({
+    inactiveTime: 60,
+    checkInterval: 5,
+    ignorePinned: true,
+    ignoreAudible: true
+  });
+  console.log('Loaded settings:', settings);
+}
+
+// Keep in-memory settings in sync with storage
+chrome.storage.onChanged.addListener((changes, areaName) => {
+  if (areaName !== 'sync') {
+    return;
+  }
+  Object.entries(changes).forEach(([key, { newValue }]) => {
+    if (key in settings && newValue !== undefined) {
+      settings[key] = newValue;
+    }
+  });
+});
+
 // Load settings from storage and create alarm
 async function loadSettingsAndCreateAlarm() {
   try {
-    const items = await chrome.storage.sync.get({
-      inactiveTime: 60,
-      checkInterval: 5,
-      ignorePinned: true,
-      ignoreAudible: true
-    });
-    
-    settings = items;
-    console.log('Loaded settings:', settings);
+    await loadSettings();
     
     // Clear existing alarm and create new one with updated interval
     await chrome.alarms.clear('cleanupTabs');
@@ -256,7 +249,7 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
       
       if (message.action === 'getRecentlyClosedTabs') {
         console.log('Getting recently closed tabs...');
-        sendResponse({ recentlyClosedTabs: recentlyClosedTabs || [] });
+        sendResponse({ recentlyClosedTabs: recentlyClosedTabs });
         return;
       }
       
@@ -292,103 +285,6 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
   
   return true; // Return true for async message handling
 });
-
-// Get tabs data with activity information
-async function getTabsData() {
-  try {
-    const tabs = await chrome.tabs.query({});
-    const now = Date.now();
-    const inactiveThreshold = settings.inactiveTime * 60 * 1000;
-    const activeTab = await chrome.tabs.query({ active: true, currentWindow: true });
-    const activeTabId = activeTab[0]?.id;
-
-    return tabs.map(tab => {
-      // Use stored activity data - don't default to now for display
-      const lastActivity = tabActivity[tab.id];
-      let inactiveTime, minutesInactive, hoursInactive;
-      
-      if (lastActivity && lastActivity !== 'newly_discovered') {
-        inactiveTime = now - lastActivity;
-        minutesInactive = Math.floor(inactiveTime / (1000 * 60));
-        hoursInactive = (inactiveTime / (1000 * 60 * 60)).toFixed(1);
-      } else {
-        // No tracking data available or newly discovered
-        inactiveTime = 0;
-        minutesInactive = 0;
-        hoursInactive = 0;
-      }
-      
-      let status = 'safe';
-      let statusText;
-      
-      // Handle tabs without tracking data or newly discovered tabs
-      if (!lastActivity) {
-        statusText = 'Not tracked yet';
-      } else if (lastActivity === 'newly_discovered') {
-        statusText = 'Tracking started';
-      } else {
-        statusText = `Active ${minutesInactive}m ago`;
-      }
-      
-      if (tab.id === activeTabId) {
-        status = 'safe';
-        statusText = 'Currently Active';
-      } else if (lastActivity && inactiveTime > inactiveThreshold * 0.8) {
-        status = 'danger';
-        statusText = `Will close soon (${hoursInactive}h inactive)`;
-      } else if (lastActivity && inactiveTime > inactiveThreshold * 0.5) {
-        status = 'warning';
-        statusText = `${hoursInactive}h inactive`;
-      }
-      
-      // Check if tab would be protected
-      let protected = false;
-      let protectedReason = '';
-      
-      if (tab.url.startsWith('chrome://')) {
-        protected = true;
-        protectedReason = 'Chrome page';
-      } else if (settings.ignorePinned && tab.pinned) {
-        protected = true;
-        protectedReason = 'Pinned';
-      } else if (settings.ignoreAudible && tab.audible) {
-        protected = true;
-        protectedReason = 'Playing audio';
-      }
-      
-      if (protected) {
-        status = 'safe';
-        statusText = `Protected (${protectedReason})`;
-      }
-
-      return {
-        id: tab.id,
-        title: tab.title,
-        url: tab.url,
-        status: status,
-        statusText: statusText,
-        inactiveTime: inactiveTime,
-        minutesInactive: minutesInactive,
-        hoursInactive: hoursInactive,
-        protected: protected,
-        protectedReason: protectedReason,
-        pinned: tab.pinned,
-        audible: tab.audible,
-        active: tab.id === activeTabId
-      };
-    }).sort((a, b) => {
-      // Sort by status priority, then by inactive time
-      const statusOrder = { danger: 0, warning: 1, safe: 2 };
-      if (statusOrder[a.status] !== statusOrder[b.status]) {
-        return statusOrder[a.status] - statusOrder[b.status];
-      }
-      return b.inactiveTime - a.inactiveTime;
-    });
-  } catch (error) {
-    console.error('Error getting tabs data:', error);
-    return [];
-  }
-}
 
 // Track tab activity with custom system
 chrome.tabs.onActivated.addListener(async (activeInfo) => {
@@ -501,31 +397,25 @@ async function getTabsDataWithCustomTracking() {
       const lastActivity = tabActivity[tab.id];
       let inactiveTime, minutesInactive, hoursInactive;
       
-      if (lastActivity && lastActivity !== 'newly_discovered') {
+      if (lastActivity && typeof lastActivity === 'number') {
         inactiveTime = now - lastActivity;
         minutesInactive = Math.floor(inactiveTime / (1000 * 60));
         hoursInactive = (inactiveTime / (1000 * 60 * 60)).toFixed(1);
         console.log(`Tab ${tab.id} (${tab.title.substring(0, 30)}...): last activity ${new Date(lastActivity).toLocaleTimeString()}, inactive for ${minutesInactive}m`);
       } else {
-        // No tracking data available or newly discovered
+        // No tracking data available or invalid data
         inactiveTime = 0;
         minutesInactive = 0;
         hoursInactive = 0;
-        if (lastActivity === 'newly_discovered') {
-          console.log(`Tab ${tab.id} (${tab.title.substring(0, 30)}...): newly discovered, tracking started`);
-        } else {
-          console.log(`Tab ${tab.id} (${tab.title.substring(0, 30)}...): no tracking data available`);
-        }
+        console.log(`Tab ${tab.id} (${tab.title.substring(0, 30)}...): no tracking data available`);
       }
       
       let status = 'safe';
       let statusText;
       
-      // Handle tabs without tracking data or newly discovered tabs
+      // Handle tabs without tracking data
       if (!lastActivity) {
         statusText = 'Not tracked yet';
-      } else if (lastActivity === 'newly_discovered') {
-        statusText = 'Tracking started';
       } else {
         // Format time display - switch to hours after 120 minutes
         if (minutesInactive >= 120) {
@@ -604,30 +494,24 @@ async function initializeExistingTabs() {
     
     console.log('Initializing activity tracking for', tabs.length, 'existing tabs');
     
-    // Load existing activity data from storage first
-    const result = await chrome.storage.local.get(['backgroundTabActivity', 'extensionInstallTime']);
-    const savedActivity = result.backgroundTabActivity || {};
-    let installTime = result.extensionInstallTime;
-    
-    // If this is first run, save install time
-    if (!installTime) {
-      installTime = now;
-      await chrome.storage.local.set({ extensionInstallTime: installTime });
-      console.log('First extension run - saving install time:', new Date(installTime));
+    // Record install time on first run
+    const result = await chrome.storage.local.get(['extensionInstallTime']);
+    if (!result.extensionInstallTime) {
+      await chrome.storage.local.set({ extensionInstallTime: now });
+      console.log('First extension run - saving install time:', new Date(now));
     }
     
     tabs.forEach(tab => {
-      if (savedActivity[tab.id]) {
-        // Use saved activity if available
-        tabActivity[tab.id] = savedActivity[tab.id];
-        tabVisitHistory[tab.id] = savedActivity[tab.id];
-        console.log(`Tab ${tab.id}: Using saved activity from ${new Date(savedActivity[tab.id]).toLocaleTimeString()}`);
+      if (tabActivity[tab.id]) {
+        // Use the validated activity data that was already loaded
+        tabVisitHistory[tab.id] = tabActivity[tab.id];
+        console.log(`Tab ${tab.id}: Using saved activity from ${new Date(tabActivity[tab.id]).toLocaleTimeString()}`);
       } else {
-        // For unknown tabs, mark them as newly discovered
-        // Use a special marker to indicate tracking just started
-        tabActivity[tab.id] = 'newly_discovered';
-        tabVisitHistory[tab.id] = now; // Use current time for visit history to prevent premature closure
-        console.log(`Tab ${tab.id}: Newly discovered tab, tracking started`);
+        // Unknown tabs start their clock now. Tab IDs change on every browser
+        // restart, so backdating these would close every restored tab at once.
+        tabActivity[tab.id] = now;
+        tabVisitHistory[tab.id] = now;
+        console.log(`Tab ${tab.id}: No saved activity - tracking from now`);
       }
       
       if (activeTab.length > 0 && tab.id === activeTab[0].id) {
@@ -689,7 +573,7 @@ async function addToRecentlyClosedTabs(tab, reason = 'auto-closed') {
       windowId: tab.windowId,
       closedAt: Date.now(),
       reason: reason,
-      inactiveTime: (tabActivity[tab.id] && tabActivity[tab.id] !== 'newly_discovered') ? Date.now() - tabActivity[tab.id] : 0
+      inactiveTime: tabActivity[tab.id] ? Date.now() - tabActivity[tab.id] : 0
     };
 
     recentlyClosedTabs.unshift(closedTabInfo);
@@ -826,10 +710,6 @@ async function ensureAllTabsTracked() {
     const now = Date.now();
     let newTabsTracked = 0;
     
-    // Get install time to properly estimate age of new tabs
-    const result = await chrome.storage.local.get(['extensionInstallTime']);
-    const installTime = result.extensionInstallTime || now;
-    
     tabs.forEach(tab => {
       if (!tabActivity[tab.id]) {
         // New tab discovered - give it current timestamp to prevent premature closure
@@ -878,6 +758,10 @@ async function cleanupInactiveTabs() {
       console.log('Cleanup skipped - cleaning is paused');
       return;
     }
+    // Read settings fresh every run: the service worker may have been
+    // restarted since they were last loaded, leaving only the defaults
+    await loadSettings();
+    
     // First ensure all tabs are being tracked
     await ensureAllTabsTracked();
     
@@ -906,8 +790,8 @@ async function cleanupInactiveTabs() {
       }
 
       const lastActivity = tabActivity[tab.id];
-      if (!lastActivity || lastActivity === 'newly_discovered') {
-        console.log(`Tab ${tab.id} has no activity data or is newly discovered - skipping`);
+      if (!lastActivity) {
+        console.log(`Tab ${tab.id} has no activity data - skipping`);
         continue;
       }
       
