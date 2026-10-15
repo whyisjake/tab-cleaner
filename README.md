@@ -1,6 +1,8 @@
 # Tab Cleaner
 
 [![Publish to Chrome Web Store](https://github.com/whyisjake/tab-cleaner/actions/workflows/publish-extension.yml/badge.svg)](https://github.com/whyisjake/tab-cleaner/actions/workflows/publish-extension.yml)
+[![Tests](https://github.com/whyisjake/tab-cleaner/actions/workflows/test.yml/badge.svg)](https://github.com/whyisjake/tab-cleaner/actions/workflows/test.yml)
+[![codecov](https://codecov.io/gh/whyisjake/tab-cleaner/graph/badge.svg)](https://codecov.io/gh/whyisjake/tab-cleaner)
 
 A Chrome extension that automatically closes inactive tabs to keep your browser clean, fast, and organized.
 

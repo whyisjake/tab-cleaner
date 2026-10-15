@@ -16,8 +16,12 @@ This is a browser extension project with no build system - files are loaded dire
 # 2. Enable "Developer mode"
 # 3. Click "Load unpacked" and select the project directory
 
-# No build, test, or lint commands - this is a simple JavaScript extension
+# Run tests (Node's built-in runner, no dependencies)
+npm test
+npm run test:coverage   # fails below 100% line/branch/function coverage of background.js
 ```
+
+Tests in `tests/` load a fresh `background.js` into a `vm` context per test with an in-memory `chrome` mock (`tests/helpers/chrome-mock.js`), so each test is one service worker lifetime. Use `failOnce` to inject API failures. popup.js and options.js are not covered.
 
 ## Architecture
 
