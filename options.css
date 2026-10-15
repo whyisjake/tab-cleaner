@@ -79,7 +79,7 @@
 /* Fixed width so the number inputs line up whatever the unit word */
 .setting-unit {
   min-width: 52px;
-  font-size: 13px;
+  font-size: var(--text-base);
   color: var(--text-muted);
 }
 
@@ -110,7 +110,7 @@
   border-left: 3px solid var(--accent);
   border-radius: var(--radius-sm);
   background: var(--surface-2);
-  font-size: 13px;
+  font-size: var(--text-base);
   color: var(--text-muted);
 }
 

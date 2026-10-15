@@ -175,6 +175,8 @@ function displayTabs(tabs) {
         const closeButtonText = tab.active ? 'Active' : 'Close';
         const closeButtonDisabled = !canClose ? 'disabled' : '';
 
+        const title = escapeHtml(tab.title);
+
         // Markers sit outside the truncated title so they stay visible
         const markers = [
             tab.pinned ? '<span class="badge">📌 Pinned</span>' : '',
@@ -186,13 +188,13 @@ function displayTabs(tabs) {
             <div class="tab-item">
                 <span class="tab-icon" aria-hidden="true">${icon}</span>
                 <div class="tab-info">
-                    <div class="tab-title">${escapeHtml(tab.title)}</div>
+                    <div class="tab-title">${title}</div>
                     <div class="tab-url muted">${escapeHtml(tab.url)}</div>
                     ${markers ? `<div class="tab-markers">${markers}</div>` : ''}
                 </div>
                 <div class="tab-actions">
                     <div class="tab-status badge ${escapeHtml(tab.status)}">${escapeHtml(tab.statusText)}</div>
-                    <button class="close-tab-btn btn btn-danger btn-sm" data-tab-id="${tab.id}" aria-label="Close ${escapeHtml(tab.title)}" ${closeButtonDisabled}>
+                    <button class="close-tab-btn btn btn-danger btn-sm" data-tab-id="${tab.id}" aria-label="Close ${title}" ${closeButtonDisabled}>
                         ${closeButtonText}
                     </button>
                 </div>
