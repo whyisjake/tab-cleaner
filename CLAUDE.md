@@ -49,6 +49,7 @@ Tests in `tests/` load a fresh `background.js` into a `vm` context per test with
 
 - `tabActivity`: Maps tab IDs to last activity timestamps
 - `tabVisitHistory`: Tracks tab visit patterns
+- `tabUrls`: Maps tab IDs to their last known URL. Tab IDs change on browser restart, so at startup saved entries for IDs that no longer exist move to `restorePool`, and restored tabs claim their old timestamp by URL for `RESTORE_WINDOW_MS` (5 minutes)
 - `settings`: Configuration object with inactive time, intervals, and protection flags
 
 ### Chrome Extension APIs Used

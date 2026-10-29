@@ -172,6 +172,9 @@ This project is licensed under the MIT License - see the [LICENSE](LICENSE) file
 
 ## Changelog
 
+### Version 1.3.1
+- **Fixed**: Restarting the browser reset every tab's inactive time, so with a long limit and a daily restart nothing was ever closed. Restored tabs now keep the inactive time they had before the restart
+
 ### Version 1.3.0
 - **New**: Redesigned popup and settings page with a shared, modern look
 - **New**: Dark mode that follows your system setting

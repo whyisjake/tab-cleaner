@@ -163,6 +163,99 @@ describe('cleanup', () => {
     assert.deepEqual(Object.keys(bg.chrome.storage.local.data.backgroundTabActivity).sort(), ['101', '102', '103']);
   });
 
+  it('gives restored tabs their saved activity back by URL', async () => {
+    // Regression: restarting the browser reset every tab's idle clock, so with
+    // a 24 hour limit and a daily restart nothing ever closed
+    const bg = loadBackground({
+      sync: DAY_SETTINGS,
+      local: {
+        backgroundTabActivity: { 1: ago(25 * HOUR), 2: ago(2 * HOUR), 3: ago(30 * HOUR) },
+        backgroundTabUrls: { 1: 'https://old.example', 2: 'https://recent.example', 3: 'https://gone.example' }
+      },
+      tabs: [
+        { id: 101, active: true, url: 'https://old.example' },
+        { id: 102, url: 'https://old.example' },
+        { id: 103, url: 'https://recent.example' },
+        { id: 104, url: 'https://new.example' }
+      ]
+    });
+    const saved = bg.chrome.storage.local.data.backgroundTabActivity;
+    const recent = saved[2];
+
+    await bg.chrome.runtime.onStartup.fire();
+    await bg.alarm('cleanupTabs');
+
+    // The active tab is fresh even though its URL matched; 102 then took the old entry
+    assert.deepEqual(bg.tabIds(), [101, 103, 104]);
+    assert.equal(bg.get('tabActivity')[103], recent);
+    assert.ok(bg.get('tabActivity')[104] > ago(MINUTE));
+    assert.deepEqual(bg.plain(bg.chrome.storage.local.data.backgroundTabUrls), {
+      101: 'https://old.example',
+      103: 'https://recent.example',
+      104: 'https://new.example'
+    });
+  });
+
+  it('gives tabs restored after startup their saved activity back', async () => {
+    const bg = await started({
+      sync: DAY_SETTINGS,
+      local: {
+        backgroundTabActivity: { 1: ago(25 * HOUR), 2: ago(3 * HOUR) },
+        backgroundTabUrls: { 1: 'https://a.example', 2: 'https://b.example' }
+      },
+      tabs: [{ id: 101, active: true, url: 'https://new.example' }]
+    });
+    const pool = bg.plain(bg.get('restorePool'));
+    bg.chrome._tabs.push(
+      { id: 102, windowId: 1, url: 'https://a.example', title: 'A' },
+      { id: 103, windowId: 1, url: '', title: 'B' }
+    );
+
+    await bg.chrome.tabs.onCreated.fire({ id: 102, url: 'https://a.example' });
+    await bg.chrome.tabs.onCreated.fire({ id: 103, url: '', pendingUrl: 'https://b.example' });
+    await bg.alarm('cleanupTabs');
+
+    assert.equal(pool.length, 2);
+    assert.deepEqual(bg.tabIds(), [101, 103]);
+    assert.ok(bg.get('tabActivity')[103] < ago(2 * HOUR));
+  });
+
+  it('gives a URL open twice each saved entry once, most recent first', async () => {
+    const bg = await started({
+      sync: DAY_SETTINGS,
+      local: {
+        backgroundTabActivity: { 1: ago(30 * HOUR), 2: ago(2 * HOUR) },
+        backgroundTabUrls: { 1: 'https://dup.example', 2: 'https://dup.example' }
+      },
+      tabs: [{ id: 100, active: true, url: 'https://x.example' }]
+    });
+
+    await bg.chrome.tabs.onCreated.fire({ id: 101, url: 'https://dup.example' });
+    await bg.chrome.tabs.onCreated.fire({ id: 102, url: 'https://dup.example' });
+    await bg.chrome.tabs.onCreated.fire({ id: 103, url: 'https://dup.example' });
+
+    const activity = bg.get('tabActivity');
+    assert.ok(activity[101] > ago(3 * HOUR) && activity[101] < ago(HOUR));
+    assert.ok(activity[102] < ago(29 * HOUR));
+    assert.ok(activity[103] > ago(MINUTE));
+  });
+
+  it('stops restoring saved activity once the startup window has passed', async () => {
+    const bg = await started({
+      sync: DAY_SETTINGS,
+      local: {
+        backgroundTabActivity: { 1: ago(25 * HOUR) },
+        backgroundTabUrls: { 1: 'https://a.example' }
+      },
+      tabs: [{ id: 101, active: true, url: 'https://x.example' }]
+    });
+    bg.get('restorePoolExpiresAt = Date.now() - 1');
+
+    await bg.chrome.tabs.onCreated.fire({ id: 102, url: 'https://a.example' });
+
+    assert.ok(bg.get('tabActivity')[102] > ago(MINUTE));
+  });
+
   it('eventually closes restored tabs that are never visited', async () => {
     const bg = await started({
       sync: DAY_SETTINGS,
@@ -465,6 +558,17 @@ describe('activity tracking', () => {
 
     assert.ok(bg.get('tabActivity')[1] > ago(MINUTE));
     assert.ok(bg.get('tabActivity')[2] < ago(MINUTE));
+  });
+
+  it('remembers the URL each tab navigates to and forgets it when the tab closes', async () => {
+    const bg = await started({ tabs: [{ id: 1, active: true }, { id: 2 }] });
+
+    await bg.chrome.tabs.onUpdated.fire(2, { url: 'https://example.com/elsewhere' }, {});
+    assert.equal(bg.chrome.storage.local.data.backgroundTabUrls[2], 'https://example.com/elsewhere');
+
+    await bg.chrome.tabs.remove(2);
+    await bg.chrome.tabs.onRemoved.fire(2);
+    assert.equal(bg.chrome.storage.local.data.backgroundTabUrls[2], undefined);
   });
 
   it('ignores updates that are not loads or navigations', async () => {
