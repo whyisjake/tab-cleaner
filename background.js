@@ -11,6 +11,16 @@ let settings = {
 let tabVisitHistory = {};
 let lastActiveTab = null;
 
+// Last known URL of each tracked tab. Tab IDs change on every browser
+// restart, so URLs are how restored tabs get their saved activity back.
+let tabUrls = {};
+
+// Saved activity whose tab ID no longer exists, as [{ url, timestamp }].
+// Restored tabs can claim an entry by URL shortly after startup.
+let restorePool = [];
+let restorePoolExpiresAt = 0;
+const RESTORE_WINDOW_MS = 5 * 60 * 1000;
+
 // Track recently closed tabs for recovery
 let recentlyClosedTabs = [];
 
@@ -101,6 +111,7 @@ async function loadTabActivityFromStorage() {
   try {
     const result = await chrome.storage.local.get([
       'backgroundTabActivity',
+      'backgroundTabUrls',
       'backgroundLastActiveTab', 
       'backgroundActivityTimestamp'
     ]);
@@ -119,6 +130,10 @@ async function loadTabActivityFromStorage() {
       });
       
       console.log(`Restored tab activity for ${Object.keys(tabActivity).length} tabs (filtered from ${Object.keys(rawActivity).length})`);
+    }
+
+    if (result.backgroundTabUrls) {
+      tabUrls = result.backgroundTabUrls;
     }
     
     if (result.backgroundLastActiveTab) {
@@ -315,6 +330,10 @@ chrome.tabs.onUpdated.addListener(async (tabId, changeInfo, tab) => {
     const now = Date.now();
     console.log('Tab updated:', tabId, changeInfo, 'at', new Date(now).toLocaleTimeString());
     
+    if (changeInfo.url) {
+      tabUrls[tabId] = changeInfo.url;
+    }
+    
     // Only update activity if this is the active tab
     try {
       const activeTabs = await chrome.tabs.query({ active: true, currentWindow: true });
@@ -324,6 +343,8 @@ chrome.tabs.onUpdated.addListener(async (tabId, changeInfo, tab) => {
         lastKeepalive = now;
         console.log('Updated activity for active tab:', tabId);
         // Save activity data
+        await saveTabActivityToStorage();
+      } else if (changeInfo.url) {
         await saveTabActivityToStorage();
       }
     } catch (error) {
@@ -336,10 +357,12 @@ chrome.tabs.onCreated.addListener(async (tab) => {
   await ensureServiceWorkerInitialized();
   
   console.log('Tab created:', tab.id);
-  // Initialize activity for new tab
+  // Session restore creates tabs too; those get their saved activity back
   const now = Date.now();
-  tabActivity[tab.id] = now;
-  tabVisitHistory[tab.id] = now;
+  const activity = claimRestoredActivity(tabUrl(tab)) ?? now;
+  tabActivity[tab.id] = activity;
+  tabVisitHistory[tab.id] = activity;
+  rememberTabUrl(tab);
   lastKeepalive = now;
   await saveTabActivityToStorage();
   await updateTabCountBadge();
@@ -351,6 +374,7 @@ chrome.tabs.onRemoved.addListener(async (tabId) => {
   console.log('Tab removed:', tabId);
   delete tabActivity[tabId];
   delete tabVisitHistory[tabId];
+  delete tabUrls[tabId];
   
   if (lastActiveTab === tabId) {
     lastActiveTab = null;
@@ -501,25 +525,29 @@ async function initializeExistingTabs() {
       console.log('First extension run - saving install time:', new Date(now));
     }
     
+    fillRestorePool(tabs, now);
+    
     tabs.forEach(tab => {
-      if (tabActivity[tab.id]) {
-        // Use the validated activity data that was already loaded
-        tabVisitHistory[tab.id] = tabActivity[tab.id];
-        console.log(`Tab ${tab.id}: Using saved activity from ${new Date(tabActivity[tab.id]).toLocaleTimeString()}`);
-      } else {
-        // Unknown tabs start their clock now. Tab IDs change on every browser
-        // restart, so backdating these would close every restored tab at once.
-        tabActivity[tab.id] = now;
-        tabVisitHistory[tab.id] = now;
-        console.log(`Tab ${tab.id}: No saved activity - tracking from now`);
-      }
+      rememberTabUrl(tab);
       
       if (activeTab.length > 0 && tab.id === activeTab[0].id) {
-        // Current active tab gets current timestamp
+        // Current active tab gets current timestamp, leaving any saved entry
+        // for its URL to another restored tab
         tabActivity[tab.id] = now;
         tabVisitHistory[tab.id] = now;
         lastActiveTab = tab.id;
         console.log('Set active tab:', tab.id, 'to current time');
+      } else if (tabActivity[tab.id]) {
+        // Use the validated activity data that was already loaded
+        tabVisitHistory[tab.id] = tabActivity[tab.id];
+        console.log(`Tab ${tab.id}: Using saved activity from ${new Date(tabActivity[tab.id]).toLocaleTimeString()}`);
+      } else {
+        // A restored tab gets the activity saved under its old ID. Anything
+        // else starts its clock now rather than being backdated.
+        const activity = claimRestoredActivity(tabUrl(tab)) ?? now;
+        tabActivity[tab.id] = activity;
+        tabVisitHistory[tab.id] = activity;
+        console.log(`Tab ${tab.id}: Tracking from ${new Date(activity).toLocaleTimeString()}`);
       }
     });
     
@@ -535,11 +563,56 @@ async function initializeExistingTabs() {
   }
 }
 
+function tabUrl(tab) {
+  return tab.url || tab.pendingUrl;
+}
+
+function rememberTabUrl(tab) {
+  const url = tabUrl(tab);
+  if (url) {
+    tabUrls[tab.id] = url;
+  }
+}
+
+// Move saved activity for tab IDs that no longer exist into the restore pool
+function fillRestorePool(tabs, now) {
+  const existingTabIds = new Set(tabs.map(tab => String(tab.id)));
+  restorePool = [];
+  Object.keys(tabActivity).forEach(tabId => {
+    if (existingTabIds.has(tabId)) {
+      return;
+    }
+    if (tabUrls[tabId]) {
+      restorePool.push({ url: tabUrls[tabId], timestamp: tabActivity[tabId] });
+    }
+    delete tabActivity[tabId];
+    delete tabVisitHistory[tabId];
+    delete tabUrls[tabId];
+  });
+  // Most recent first, so duplicate URLs never inherit more idle time than they had
+  restorePool.sort((a, b) => b.timestamp - a.timestamp);
+  restorePoolExpiresAt = now + RESTORE_WINDOW_MS;
+  console.log(`Restore pool holds ${restorePool.length} saved tabs`);
+}
+
+// Saved activity for a restored tab with this URL, or undefined
+function claimRestoredActivity(url) {
+  if (!url || Date.now() > restorePoolExpiresAt) {
+    return undefined;
+  }
+  const index = restorePool.findIndex(entry => entry.url === url);
+  if (index === -1) {
+    return undefined;
+  }
+  return restorePool.splice(index, 1)[0].timestamp;
+}
+
 // Save tab activity to storage with enhanced error handling
 async function saveTabActivityToStorage() {
   try {
     const dataToSave = {
       'backgroundTabActivity': tabActivity,
+      'backgroundTabUrls': tabUrls,
       'backgroundLastActiveTab': lastActiveTab,
       'backgroundActivityTimestamp': Date.now(),
       'backgroundKeepaliveTimestamp': lastKeepalive
@@ -630,6 +703,7 @@ async function reopenClosedTab(closedTabId) {
     // Initialize activity for the reopened tab
     tabActivity[newTab.id] = Date.now();
     tabVisitHistory[newTab.id] = Date.now();
+    rememberTabUrl(newTab);
     
     // Remove from recently closed list
     recentlyClosedTabs.splice(tabIndex, 1);
@@ -662,6 +736,7 @@ async function closeTabWithTracking(tabId) {
     // Clean up tracking data
     delete tabActivity[tabId];
     delete tabVisitHistory[tabId];
+    delete tabUrls[tabId];
     
     if (lastActiveTab === tabId) {
       lastActiveTab = null;
@@ -717,6 +792,7 @@ async function ensureAllTabsTracked() {
         const estimatedLastActivity = now;
         tabActivity[tab.id] = estimatedLastActivity;
         tabVisitHistory[tab.id] = estimatedLastActivity;
+        rememberTabUrl(tab);
         newTabsTracked++;
         console.log(`Started tracking tab ${tab.id}, estimated last activity: ${new Date(estimatedLastActivity).toLocaleTimeString()}`);
       }
@@ -736,6 +812,7 @@ async function ensureAllTabsTracked() {
       if (!existingTabIds.has(tabId)) {
         delete tabActivity[tabId];
         delete tabVisitHistory[tabId];
+        delete tabUrls[tabId];
         removedTracking++;
       }
     });
@@ -808,6 +885,7 @@ async function cleanupInactiveTabs() {
           await chrome.tabs.remove(tab.id);
           delete tabActivity[tab.id];
           delete tabVisitHistory[tab.id];
+          delete tabUrls[tab.id];
           tabsClosedThisRun++;
         } catch (error) {
           console.error(`Error closing tab ${tab.id}:`, error);
