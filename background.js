@@ -331,6 +331,15 @@ chrome.tabs.onUpdated.addListener(async (tabId, changeInfo, tab) => {
     console.log('Tab updated:', tabId, changeInfo, 'at', new Date(now).toLocaleTimeString());
     
     if (changeInfo.url) {
+      // Restored tabs can be created before their URL is known. When it
+      // first arrives, give the tab its saved activity back.
+      if (!tabUrls[tabId]) {
+        const restored = claimRestoredActivity(changeInfo.url);
+        if (restored !== undefined) {
+          tabActivity[tabId] = restored;
+          tabVisitHistory[tabId] = restored;
+        }
+      }
       tabUrls[tabId] = changeInfo.url;
     }
     
@@ -357,11 +366,15 @@ chrome.tabs.onCreated.addListener(async (tab) => {
   await ensureServiceWorkerInitialized();
   
   console.log('Tab created:', tab.id);
-  // Session restore creates tabs too; those get their saved activity back
+  // Session restore creates tabs too; those get their saved activity back.
+  // Restored tabs' events can wake the worker, so startup may already have
+  // tracked this tab. Overwriting that would reset its idle clock.
   const now = Date.now();
-  const activity = claimRestoredActivity(tabUrl(tab)) ?? now;
-  tabActivity[tab.id] = activity;
-  tabVisitHistory[tab.id] = activity;
+  if (!tabActivity[tab.id]) {
+    const activity = claimRestoredActivity(tabUrl(tab)) ?? now;
+    tabActivity[tab.id] = activity;
+    tabVisitHistory[tab.id] = activity;
+  }
   rememberTabUrl(tab);
   lastKeepalive = now;
   await saveTabActivityToStorage();

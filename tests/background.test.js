@@ -240,6 +240,81 @@ describe('cleanup', () => {
     assert.ok(activity[103] > ago(MINUTE));
   });
 
+  it('keeps restored activity when the restored tabs\' own events start the worker', async () => {
+    // Regression: session restore fires onCreated for every tab, which wakes
+    // the worker. Startup restored each tab by URL, then the queued onCreated
+    // handlers found the entries spent and reset every tab to now.
+    const bg = loadBackground({
+      sync: DAY_SETTINGS,
+      local: {
+        backgroundTabActivity: { 1: ago(20 * HOUR), 2: ago(10 * HOUR) },
+        backgroundTabUrls: { 1: 'https://a.example', 2: 'https://b.example' }
+      },
+      tabs: [
+        { id: 101, active: true, url: 'https://x.example' },
+        { id: 102, url: 'https://a.example' },
+        { id: 103, url: 'https://b.example' }
+      ]
+    });
+    const saved = bg.plain(bg.chrome.storage.local.data.backgroundTabActivity);
+
+    await Promise.all([
+      bg.chrome.tabs.onCreated.fire({ id: 102, url: 'https://a.example' }),
+      bg.chrome.tabs.onCreated.fire({ id: 103, url: 'https://b.example' })
+    ]);
+
+    const activity = bg.get('tabActivity');
+    assert.equal(activity[102], saved[1]);
+    assert.equal(activity[103], saved[2]);
+    assert.equal(bg.chrome.storage.local.data.backgroundTabActivity[102], saved[1]);
+  });
+
+  it('gives a restored tab its saved activity back when its URL arrives later', async () => {
+    const bg = await started({
+      sync: DAY_SETTINGS,
+      local: {
+        backgroundTabActivity: { 1: ago(20 * HOUR) },
+        backgroundTabUrls: { 1: 'https://a.example' }
+      },
+      tabs: [{ id: 101, active: true, url: 'https://x.example' }]
+    });
+    const saved = bg.plain(bg.get('restorePool'))[0].timestamp;
+    bg.chrome._tabs.push(
+      { id: 102, windowId: 1, url: 'https://a.example', title: 'A' },
+      { id: 103, windowId: 1, url: 'https://new.example', title: 'New' }
+    );
+
+    await bg.chrome.tabs.onCreated.fire({ id: 102, url: '' });
+    await bg.chrome.tabs.onCreated.fire({ id: 103, url: '' });
+    await bg.chrome.tabs.onUpdated.fire(102, { url: 'https://a.example' }, { id: 102 });
+    await bg.chrome.tabs.onUpdated.fire(103, { url: 'https://new.example' }, { id: 103 });
+
+    const activity = bg.get('tabActivity');
+    assert.equal(activity[102], saved);
+    assert.ok(activity[103] > ago(MINUTE));
+    assert.equal(bg.chrome.storage.local.data.backgroundTabActivity[102], saved);
+  });
+
+  it('does not backdate a tab that navigates to a saved URL', async () => {
+    const bg = await started({
+      sync: DAY_SETTINGS,
+      local: {
+        backgroundTabActivity: { 1: ago(20 * HOUR) },
+        backgroundTabUrls: { 1: 'https://a.example' }
+      },
+      tabs: [
+        { id: 101, active: true, url: 'https://x.example' },
+        { id: 102, url: 'https://y.example' }
+      ]
+    });
+    const before = bg.get('tabActivity')[102];
+
+    await bg.chrome.tabs.onUpdated.fire(102, { url: 'https://a.example' }, { id: 102 });
+
+    assert.equal(bg.get('tabActivity')[102], before);
+    assert.equal(bg.get('restorePool').length, 1);
+  });
+
   it('stops restoring saved activity once the startup window has passed', async () => {
     const bg = await started({
       sync: DAY_SETTINGS,
